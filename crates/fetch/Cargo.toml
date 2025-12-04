@@ -1,0 +1,13 @@
+[package]
+name = "fetch"
+description = "Background data fetching and refresh"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+data = { workspace = true }
+api = { workspace = true }
+config = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
