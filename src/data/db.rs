@@ -286,8 +286,7 @@ impl Database {
                 "SELECT COALESCE(MAX(display_order), -1) FROM watchlist",
                 [],
                 |row| row.get(0),
-            )
-            .unwrap_or(-1);
+            )?;
 
         self.conn.execute(
             "INSERT OR IGNORE INTO watchlist (symbol, display_order) VALUES (?1, ?2)",
@@ -317,10 +316,16 @@ impl Database {
 }
 
 /// Parse RFC3339 datetime string
+///
+/// Falls back to current time if parsing fails. This is intentional for graceful degradation
+/// when reading potentially corrupted database records.
 fn parse_datetime(s: String) -> DateTime<Utc> {
     DateTime::parse_from_rfc3339(&s)
         .map(|dt| dt.with_timezone(&Utc))
-        .unwrap_or_else(|_| Utc::now())
+        .unwrap_or_else(|_| {
+            // Fallback to current time for corrupted timestamps
+            Utc::now()
+        })
 }
 
 #[cfg(test)]
