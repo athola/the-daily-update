@@ -1,0 +1,13 @@
+[package]
+name = "ui"
+description = "TUI components and layout"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+app = { workspace = true }
+data = { workspace = true }
+config = { workspace = true }
+ratatui = { workspace = true }
+crossterm = { workspace = true }

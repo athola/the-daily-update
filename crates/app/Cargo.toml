@@ -9,7 +9,6 @@ license.workspace = true
 data = { workspace = true }
 config = { workspace = true }
 api = { workspace = true }
-ui = { workspace = true }
 fetch = { workspace = true }
 tokio = { workspace = true }
 crossterm = { workspace = true }
