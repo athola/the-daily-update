@@ -1,0 +1,34 @@
+[package]
+name = "daily-update"
+version = "0.1.0"
+edition = "2021"
+description = "Terminal-based daily news aggregator with weather and stock data"
+license = "MIT"
+
+[dependencies]
+# TUI
+ratatui = "0.29"
+crossterm = "0.28"
+
+# Async runtime
+tokio = { version = "1.41", features = ["full"] }
+
+# Database
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Utilities
+chrono = { version = "0.4", features = ["serde"] }
+directories = "5.0"
+thiserror = "2.0"
+anyhow = "1.0"
+
+[dev-dependencies]
+tempfile = "3.14"
