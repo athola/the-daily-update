@@ -50,21 +50,20 @@ fn render_collapsed_weather(frame: &mut Frame, app: &App, parent_area: Rect) {
                 Span::raw("")
             };
 
-            vec![
-                Line::from(vec![
-                    Span::raw(icon),
-                    Span::raw(" "),
-                    Span::styled(&weather.location, Style::default().fg(Color::White)),
-                    Span::raw(" "),
-                    Span::styled(temp, Style::default().fg(Color::Cyan)),
-                    alert_indicator,
-                ]),
-            ]
+            vec![Line::from(vec![
+                Span::raw(icon),
+                Span::raw(" "),
+                Span::styled(&weather.location, Style::default().fg(Color::White)),
+                Span::raw(" "),
+                Span::styled(temp, Style::default().fg(Color::Cyan)),
+                alert_indicator,
+            ])]
         }
         None => {
-            vec![Line::from(vec![
-                Span::styled("Weather unavailable", Style::default().fg(Color::DarkGray)),
-            ])]
+            vec![Line::from(vec![Span::styled(
+                "Weather unavailable",
+                Style::default().fg(Color::DarkGray),
+            )])]
         }
     };
 
@@ -120,7 +119,12 @@ fn render_expanded_weather(frame: &mut Frame, app: &App, parent_area: Rect) {
                 Line::from(vec![
                     Span::raw(icon),
                     Span::raw(" "),
-                    Span::styled(&weather.location, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        &weather.location,
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     Span::raw(" - "),
                     Span::raw(condition),
                 ]),
@@ -132,29 +136,28 @@ fn render_expanded_weather(frame: &mut Frame, app: &App, parent_area: Rect) {
                     Span::raw("  │  Wind: "),
                     Span::styled(wind, Style::default().fg(Color::Green)),
                 ]),
-                Line::from(vec![
-                    Span::styled(
-                        format!("Updated: {}", updated),
-                        Style::default().fg(Color::DarkGray),
-                    ),
-                ]),
+                Line::from(vec![Span::styled(
+                    format!("Updated: {}", updated),
+                    Style::default().fg(Color::DarkGray),
+                )]),
             ];
 
             // Add alert if present
             if let Some(alert_title) = &weather.alert_title {
                 lines.push(Line::from(vec![]));
-                lines.push(Line::from(vec![
-                    Span::styled(
-                        format!("⚠ ALERT: {}", alert_title),
-                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-                    ),
-                ]));
+                lines.push(Line::from(vec![Span::styled(
+                    format!("⚠ ALERT: {}", alert_title),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )]));
                 if let Some(desc) = &weather.alert_description {
                     // Truncate long descriptions
                     let desc_short: String = desc.chars().take(80).collect();
-                    lines.push(Line::from(vec![
-                        Span::styled(desc_short, Style::default().fg(Color::Yellow)),
-                    ]));
+                    lines.push(Line::from(vec![Span::styled(
+                        desc_short,
+                        Style::default().fg(Color::Yellow),
+                    )]));
                 }
             }
 

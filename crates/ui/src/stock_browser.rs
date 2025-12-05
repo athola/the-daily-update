@@ -126,12 +126,11 @@ fn render_stock_list(frame: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
 
-    let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::DarkGray)),
-        );
+    let list = List::new(items).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::DarkGray)),
+    );
 
     frame.render_widget(list, area);
 }
@@ -149,8 +148,7 @@ fn render_help(frame: &mut Frame, area: Rect) {
         Span::raw(" Cancel"),
     ]);
 
-    let help = Paragraph::new(help_text)
-        .style(Style::default().fg(Color::DarkGray));
+    let help = Paragraph::new(help_text).style(Style::default().fg(Color::DarkGray));
 
     frame.render_widget(help, area);
 }

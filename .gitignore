@@ -1,6 +1,5 @@
 # Rust build artifacts
 /target/
-Cargo.lock
 
 # IDE
 .vscode/
@@ -20,3 +19,5 @@ Thumbs.db
 
 # Config (contains API keys)
 config.toml
+.env
+.env.*

@@ -3,11 +3,11 @@
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
+use api::stocks::StocksClient;
 use config::settings::Config;
 use data::db::Database;
 use data::models::{AvailableStock, NewsItem, StockData, WeatherData};
 use fetch::background::{BackgroundFetcher, FetchUpdate};
-use api::stocks::StocksClient;
 
 /// Application state
 pub struct App {
@@ -77,7 +77,10 @@ impl App {
         let (news, weather, stocks, watchlist) = {
             let db = db.lock().unwrap();
             let news = db.get_news(10).unwrap_or_default();
-            let weather = db.get_weather(&config.general.default_location).ok().flatten();
+            let weather = db
+                .get_weather(&config.general.default_location)
+                .ok()
+                .flatten();
             let watchlist = db
                 .get_watchlist()
                 .unwrap_or_default()
@@ -157,14 +160,12 @@ impl App {
                         self.stocks = stocks;
                         self.errors.stocks = None;
                     }
-                    FetchUpdate::Error(err) => {
-                        match err.source.as_str() {
-                            "news" => self.errors.news = Some(err.message),
-                            "weather" => self.errors.weather = Some(err.message),
-                            "stocks" => self.errors.stocks = Some(err.message),
-                            _ => {}
-                        }
-                    }
+                    FetchUpdate::Error(err) => match err.source.as_str() {
+                        "news" => self.errors.news = Some(err.message),
+                        "weather" => self.errors.weather = Some(err.message),
+                        "stocks" => self.errors.stocks = Some(err.message),
+                        _ => {}
+                    },
                     FetchUpdate::Complete => {
                         should_complete = true;
                     }
@@ -238,7 +239,10 @@ impl App {
 
     pub fn news_prev(&mut self) {
         if !self.news.is_empty() {
-            self.news_selected = self.news_selected.checked_sub(1).unwrap_or(self.news.len() - 1);
+            self.news_selected = self
+                .news_selected
+                .checked_sub(1)
+                .unwrap_or(self.news.len() - 1);
         }
     }
 
@@ -264,7 +268,10 @@ impl App {
     /// Toggle selected stock in browser
     pub fn stock_browser_toggle(&mut self) {
         let filtered: Vec<_> = self.stock_browser.filtered_stocks();
-        if let Some(symbol) = filtered.get(self.stock_browser.selected).map(|s| s.symbol.clone()) {
+        if let Some(symbol) = filtered
+            .get(self.stock_browser.selected)
+            .map(|s| s.symbol.clone())
+        {
             if let Some(stock) = self
                 .stock_browser
                 .available
@@ -325,7 +332,9 @@ impl StockBrowserState {
             .iter()
             .filter(|s| {
                 self.filter.is_empty()
-                    || s.symbol.to_lowercase().contains(&self.filter.to_lowercase())
+                    || s.symbol
+                        .to_lowercase()
+                        .contains(&self.filter.to_lowercase())
                     || s.name.to_lowercase().contains(&self.filter.to_lowercase())
             })
             .collect()

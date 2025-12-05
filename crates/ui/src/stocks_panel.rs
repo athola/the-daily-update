@@ -21,7 +21,10 @@ pub fn render_stocks_panel(frame: &mut Frame, app: &App, area: Rect) {
 
     if let Some(first_stock) = app.stocks.first() {
         title_parts.push(Span::styled(
-            format!("Last updated: {} ", format_relative_time(first_stock.fetched_at)),
+            format!(
+                "Last updated: {} ",
+                format_relative_time(first_stock.fetched_at)
+            ),
             Style::default().fg(Color::DarkGray),
         ));
     }
@@ -74,7 +77,10 @@ pub fn render_stocks_panel(frame: &mut Frame, app: &App, area: Rect) {
 
 /// Render a single stock card
 fn render_stock_card(frame: &mut Frame, stock: &StockData, area: Rect) {
-    let price = stock.price.map(|p| format!("{:.2}", p)).unwrap_or_else(|| "N/A".to_string());
+    let price = stock
+        .price
+        .map(|p| format!("{:.2}", p))
+        .unwrap_or_else(|| "N/A".to_string());
 
     let (change_str, change_color, arrow) = match stock.change_percent {
         Some(pct) if pct > 0.0 => (format!("+{:.2}%", pct), Color::Green, "▲"),
@@ -84,7 +90,10 @@ fn render_stock_card(frame: &mut Frame, stock: &StockData, area: Rect) {
     };
 
     let card = Block::default()
-        .title(Span::styled(&stock.symbol, Style::default().fg(Color::White)))
+        .title(Span::styled(
+            &stock.symbol,
+            Style::default().fg(Color::White),
+        ))
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::DarkGray));
 
@@ -95,9 +104,7 @@ fn render_stock_card(frame: &mut Frame, stock: &StockData, area: Rect) {
     // Only render content if we have enough space
     if inner.height >= 2 {
         let content = vec![
-            Line::from(vec![
-                Span::styled(price, Style::default().fg(Color::White)),
-            ]),
+            Line::from(vec![Span::styled(price, Style::default().fg(Color::White))]),
             Line::from(vec![
                 Span::styled(change_str, Style::default().fg(change_color)),
                 Span::raw(" "),

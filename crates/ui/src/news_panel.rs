@@ -43,12 +43,10 @@ pub fn render_news_panel(frame: &mut Frame, app: &App, area: Rect) {
 
     // Build list items
     let items: Vec<ListItem> = if app.news.is_empty() {
-        vec![ListItem::new(Line::from(vec![
-            Span::styled(
-                "  No news available. Press 'r' to refresh.",
-                Style::default().fg(Color::DarkGray),
-            ),
-        ]))]
+        vec![ListItem::new(Line::from(vec![Span::styled(
+            "  No news available. Press 'r' to refresh.",
+            Style::default().fg(Color::DarkGray),
+        )]))]
     } else {
         app.news
             .iter()

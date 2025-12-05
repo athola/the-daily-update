@@ -24,7 +24,9 @@ pub fn render_help_overlay(frame: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
         .title(Span::styled(
             " Help - The Daily Update ",
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
         ))
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan));
@@ -41,10 +43,7 @@ pub fn render_help_overlay(frame: &mut Frame, app: &App, area: Rect) {
             ("G", "Go to bottom"),
         ]
     } else {
-        vec![
-            ("↑ / ↓", "Navigate up/down"),
-            ("Tab", "Switch panels"),
-        ]
+        vec![("↑ / ↓", "Navigate up/down"), ("Tab", "Switch panels")]
     };
 
     // Build help text lines

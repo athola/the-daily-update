@@ -66,7 +66,10 @@ pub fn run_setup_wizard(config: &mut Config) -> Result<()> {
 
     // Prompt for default location
     println!();
-    print!("Enter your default location for weather [{}]: ", config.general.default_location);
+    print!(
+        "Enter your default location for weather [{}]: ",
+        config.general.default_location
+    );
     io::stdout().flush()?;
 
     let mut input = String::new();

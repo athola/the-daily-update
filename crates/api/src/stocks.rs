@@ -69,13 +69,12 @@ impl StocksClient {
         }
 
         let tickers = symbols.join(",");
-        let url = format!("{}?tickers={}&token={}", TIINGO_API_BASE, tickers, self.api_key);
+        let url = format!(
+            "{}?tickers={}&token={}",
+            TIINGO_API_BASE, tickers, self.api_key
+        );
 
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .await?;
+        let response = self.client.get(&url).send().await?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -96,9 +95,7 @@ impl StocksClient {
             .into_iter()
             .map(|item| {
                 let change_percent = match (item.last_price, item.prev_close) {
-                    (Some(last), Some(prev)) if prev > 0.0 => {
-                        Some(((last - prev) / prev) * 100.0)
-                    }
+                    (Some(last), Some(prev)) if prev > 0.0 => Some(((last - prev) / prev) * 100.0),
                     _ => None,
                 };
 
@@ -124,11 +121,7 @@ impl StocksClient {
 
     /// Get default watchlist symbols
     pub fn default_watchlist() -> Vec<String> {
-        vec![
-            "SPY".to_string(),
-            "QQQ".to_string(),
-            "DIA".to_string(),
-        ]
+        vec!["SPY".to_string(), "QQQ".to_string(), "DIA".to_string()]
     }
 
     /// Get available stocks for the browser

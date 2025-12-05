@@ -75,7 +75,8 @@ impl WeatherClient {
     pub async fn fetch_weather(&self, location: &str) -> Result<WeatherData, WeatherApiError> {
         let url = format!("{}/weather", WEATHER_API_BASE_URL);
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .query(&[
                 ("q", location),
@@ -88,8 +89,14 @@ impl WeatherClient {
         // Check if the response is successful
         if !response.status().is_success() {
             let status = response.status();
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(WeatherApiError::ApiError(format!("HTTP {}: {}", status, error_text)));
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(WeatherApiError::ApiError(format!(
+                "HTTP {}: {}",
+                status, error_text
+            )));
         }
 
         let api_response: WeatherApiResponse = response.json().await?;

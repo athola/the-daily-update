@@ -82,8 +82,7 @@ impl NewsClient {
     ) -> Result<Vec<NewsItem>, NewsApiError> {
         let url = format!("{}/top-headlines", NEWS_API_BASE_URL);
 
-        let mut request = self.client.get(&url)
-            .header("X-Api-Key", &self.api_key);
+        let mut request = self.client.get(&url).header("X-Api-Key", &self.api_key);
 
         // Add query parameters
         if let Some(country) = country {
@@ -101,7 +100,8 @@ impl NewsClient {
 
         // Check if the API returned an error
         if api_response.status != "ok" {
-            let error_msg = api_response.message
+            let error_msg = api_response
+                .message
                 .unwrap_or_else(|| "Unknown API error".to_string());
             return Err(NewsApiError::ApiError(error_msg));
         }
@@ -117,7 +117,10 @@ impl NewsClient {
                 Ok(dt) => dt.with_timezone(&Utc),
                 Err(e) => {
                     // Skip articles with invalid timestamps
-                    eprintln!("Failed to parse timestamp '{}': {}", article.published_at, e);
+                    eprintln!(
+                        "Failed to parse timestamp '{}': {}",
+                        article.published_at, e
+                    );
                     continue;
                 }
             };
