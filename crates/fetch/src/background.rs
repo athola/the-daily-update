@@ -7,6 +7,7 @@ use api::location::extract_location_from_news;
 use api::news::NewsClient;
 use api::stocks::StocksClient;
 use api::weather::WeatherClient;
+use chrono::NaiveDate;
 use config::settings::Config;
 use data::db::Database;
 use data::models::{NewsItem, StockData, WeatherData, WeatherSource};
@@ -75,11 +76,15 @@ impl BackgroundFetcher {
         &self,
         db: Arc<std::sync::Mutex<Database>>,
         watchlist: Vec<String>,
+        from_date: Option<NaiveDate>,
         tx: mpsc::Sender<FetchUpdate>,
     ) {
         // Fetch news
         if let Some(client) = &self.news_client {
-            match client.fetch_top_headlines(Some("us"), None, Some(10)).await {
+            match client
+                .fetch_top_headlines_with_date(Some("us"), None, Some(10), from_date)
+                .await
+            {
                 Ok(items) => {
                     // Store in database
                     if let Ok(db) = db.lock() {
@@ -109,10 +114,7 @@ impl BackgroundFetcher {
                 let news_location = if let Ok(db_guard) = db.lock() {
                     db_guard.get_news(1).ok().and_then(|items| {
                         items.first().and_then(|item| {
-                            extract_location_from_news(
-                                &item.headline,
-                                item.description.as_deref(),
-                            )
+                            extract_location_from_news(&item.headline, item.description.as_deref())
                         })
                     })
                 } else {
@@ -121,7 +123,10 @@ impl BackgroundFetcher {
 
                 match news_location {
                     Some(loc) => (loc, WeatherSource::NewsContext),
-                    None => (self.config.general.default_location.clone(), WeatherSource::Default),
+                    None => (
+                        self.config.general.default_location.clone(),
+                        WeatherSource::Default,
+                    ),
                 }
             };
 
