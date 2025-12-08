@@ -594,4 +594,106 @@ mod tests {
 
         assert_eq!(app.selected_date, None);
     }
+
+    // ============================================================
+    // News Mention Processing and Auto-populate Tests
+    // ============================================================
+
+    fn create_news_item(headline: &str) -> NewsItem {
+        NewsItem {
+            id: None,
+            headline: headline.to_string(),
+            source: Some("Test".to_string()),
+            description: None,
+            url: None,
+            location: None,
+            published_at: Utc::now(),
+            fetched_at: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn given_news_with_company_mentions_when_processed_then_mentions_stored() {
+        let mut app = make_test_app();
+
+        // Manually add news with IDs (simulating DB insert)
+        if let Ok(db) = app.db.lock() {
+            let news = create_news_item("Apple stock rises on iPhone sales");
+            let id = db.insert_news(&news).unwrap();
+            app.news.push(NewsItem {
+                id: Some(id),
+                ..news
+            });
+        }
+
+        app.process_news_mentions();
+
+        if let Ok(db) = app.db.lock() {
+            let symbols = db.get_recently_mentioned_symbols(10).unwrap();
+            assert!(
+                symbols.contains(&"AAPL".to_string()),
+                "Expected AAPL in symbols, got: {:?}",
+                symbols
+            );
+        };
+    }
+
+    #[test]
+    fn given_multiple_mentions_when_auto_populate_then_adds_to_watchlist() {
+        let mut app = make_test_app();
+
+        // Add multiple news mentioning same company
+        if let Ok(db) = app.db.lock() {
+            let news1 = create_news_item("Tesla announces new factory");
+            let news2 = create_news_item("Tesla stock surges on delivery numbers");
+            let id1 = db.insert_news(&news1).unwrap();
+            let id2 = db.insert_news(&news2).unwrap();
+            app.news.push(NewsItem {
+                id: Some(id1),
+                ..news1
+            });
+            app.news.push(NewsItem {
+                id: Some(id2),
+                ..news2
+            });
+        }
+
+        let initial_watchlist_len = app.watchlist.len();
+        app.auto_populate_watchlist();
+
+        assert!(
+            app.watchlist.contains(&"TSLA".to_string()),
+            "Expected TSLA in watchlist, got: {:?}",
+            app.watchlist
+        );
+        assert!(
+            app.watchlist.len() > initial_watchlist_len,
+            "Watchlist should have grown"
+        );
+    }
+
+    #[test]
+    fn given_no_company_mentions_when_processed_then_spy_added() {
+        let mut app = make_test_app();
+
+        if let Ok(db) = app.db.lock() {
+            let news = create_news_item("Market sees mixed trading today");
+            let id = db.insert_news(&news).unwrap();
+            app.news.push(NewsItem {
+                id: Some(id),
+                ..news
+            });
+        }
+
+        app.process_news_mentions();
+
+        if let Ok(db) = app.db.lock() {
+            let symbols = db.get_recently_mentioned_symbols(10).unwrap();
+            assert!(
+                symbols.contains(&"SPY".to_string()),
+                "Expected SPY in symbols when no company mentioned, got: {:?}",
+                symbols
+            );
+        };
+    }
 }
