@@ -88,8 +88,15 @@ pub fn normalize_location(location: &str) -> String {
     ];
 
     // Check if location contains a comma
+    // Use rfind to handle city names with commas (e.g., "Washington, D.C., DC")
     if let Some(comma_pos) = location.rfind(',') {
         let (city_part, state_part) = location.split_at(comma_pos);
+
+        // Guard against empty state part after comma
+        if state_part.len() <= 1 {
+            return location.to_string();
+        }
+
         let state_trimmed = state_part[1..].trim().to_uppercase();
 
         // Check if it's a US state abbreviation
@@ -265,6 +272,27 @@ mod tests {
     #[test]
     fn given_empty_string_when_normalized_then_returns_empty() {
         assert_eq!(normalize_location(""), "");
+    }
+
+    #[test]
+    fn given_trailing_comma_when_normalized_then_returns_unchanged() {
+        assert_eq!(normalize_location("City,"), "City,");
+    }
+
+    #[test]
+    fn given_just_comma_when_normalized_then_returns_unchanged() {
+        assert_eq!(normalize_location(","), ",");
+    }
+
+    #[test]
+    fn given_multi_comma_location_when_normalized_then_handles_correctly() {
+        // DC after "D.C.," should be recognized as state abbreviation
+        assert_eq!(normalize_location("Washington, D.C., DC"), "Washington, D.C.,US");
+    }
+
+    #[test]
+    fn given_multi_part_international_when_normalized_then_returns_unchanged() {
+        assert_eq!(normalize_location("City, Province, Canada"), "City, Province, Canada");
     }
 
     #[test]
