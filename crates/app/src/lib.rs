@@ -153,9 +153,10 @@ impl App {
         let fetcher = BackgroundFetcher::new(self.config.clone());
         let db = Arc::clone(&self.db);
         let watchlist = self.watchlist.clone();
+        let from_date = self.selected_date;
 
         tokio::spawn(async move {
-            fetcher.fetch_all(db, watchlist, tx).await;
+            fetcher.fetch_all(db, watchlist, from_date, tx).await;
         });
     }
 
@@ -322,7 +323,8 @@ impl App {
 
     /// Get the effective date for news filtering (today if None)
     pub fn effective_date(&self) -> NaiveDate {
-        self.selected_date.unwrap_or_else(|| chrono::Utc::now().date_naive())
+        self.selected_date
+            .unwrap_or_else(|| chrono::Utc::now().date_naive())
     }
 
     /// Navigate to previous day (up to 7 days ago)
@@ -345,7 +347,11 @@ impl App {
         let new_date = current + Duration::days(1);
 
         if new_date <= today {
-            self.selected_date = if new_date == today { None } else { Some(new_date) };
+            self.selected_date = if new_date == today {
+                None
+            } else {
+                Some(new_date)
+            };
             self.start_fetch();
         }
     }
