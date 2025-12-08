@@ -50,6 +50,13 @@ fn render_collapsed_weather(frame: &mut Frame, app: &App, parent_area: Rect) {
                 Span::raw("")
             };
 
+            // Context indicator for news-based location
+            let context_indicator = if app.weather_source == data::models::WeatherSource::NewsContext {
+                Span::styled(" [news]", Style::default().fg(Color::Magenta))
+            } else {
+                Span::raw("")
+            };
+
             vec![Line::from(vec![
                 Span::raw(icon),
                 Span::raw(" "),
@@ -57,6 +64,7 @@ fn render_collapsed_weather(frame: &mut Frame, app: &App, parent_area: Rect) {
                 Span::raw(" "),
                 Span::styled(temp, Style::default().fg(Color::Cyan)),
                 alert_indicator,
+                context_indicator,
             ])]
         }
         None => {
@@ -115,6 +123,12 @@ fn render_expanded_weather(frame: &mut Frame, app: &App, parent_area: Rect) {
             let icon = get_weather_icon(Some(condition));
             let updated = format_relative_time(weather.fetched_at);
 
+            let context_label = if app.weather_source == data::models::WeatherSource::NewsContext {
+                " (from news context)"
+            } else {
+                ""
+            };
+
             let mut lines = vec![
                 Line::from(vec![
                     Span::raw(icon),
@@ -124,6 +138,10 @@ fn render_expanded_weather(frame: &mut Frame, app: &App, parent_area: Rect) {
                         Style::default()
                             .fg(Color::White)
                             .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        context_label,
+                        Style::default().fg(Color::Magenta),
                     ),
                     Span::raw(" - "),
                     Span::raw(condition),
