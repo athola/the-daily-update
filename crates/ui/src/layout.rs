@@ -1,5 +1,6 @@
 //! Main layout composition
 
+use chrono::Utc;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     Frame,
@@ -72,11 +73,28 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         spans.push(Span::raw(" | "));
     }
 
+    // Date selector
+    let today = Utc::now().date_naive();
+    let effective_date = app.selected_date.unwrap_or(today);
+    let date_display = if effective_date == today {
+        "Today".to_string()
+    } else {
+        effective_date.format("%a %b %d").to_string()
+    };
+
+    spans.push(Span::styled("◀ ", Style::default().fg(Color::DarkGray)));
+    spans.push(Span::styled(
+        format!(" {} ", date_display),
+        Style::default().fg(Color::White).bg(Color::DarkGray),
+    ));
+    spans.push(Span::styled(" ▶", Style::default().fg(Color::DarkGray)));
+    spans.push(Span::raw(" | "));
+
     // Keybindings
     let keybinds = if app.config.general.vim_mode {
-        "[j/k] Navigate  [Tab] Switch  [r] Refresh  [s] Stocks  [w] Weather  [?] Help  [q] Quit"
+        "[h/l] Date  [j/k] Nav  [Tab] Switch  [r] Refresh  [?] Help  [q] Quit"
     } else {
-        "[Up/Down] Navigate  [Tab] Switch  [r] Refresh  [s] Stocks  [w] Weather  [?] Help  [q] Quit"
+        "[←/→] Date  [↑/↓] Nav  [Tab] Switch  [r] Refresh  [?] Help  [q] Quit"
     };
 
     spans.push(Span::styled(keybinds, Style::default().fg(Color::DarkGray)));

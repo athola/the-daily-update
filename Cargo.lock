@@ -362,6 +362,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "api",
+ "chrono",
  "config",
  "data",
  "tokio",
@@ -1792,6 +1793,7 @@ name = "ui"
 version = "0.1.0"
 dependencies = [
  "app",
+ "chrono",
  "config",
  "crossterm",
  "data",
