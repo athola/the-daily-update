@@ -3,6 +3,7 @@
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
+use api::company_mapping::extract_symbols;
 use api::stocks::StocksClient;
 use chrono::{Duration, NaiveDate};
 use config::settings::Config;
@@ -163,6 +164,7 @@ impl App {
     /// Process any pending fetch updates
     pub fn process_fetch_updates(&mut self) {
         let mut should_complete = false;
+        let mut news_updated = false;
 
         if let Some(rx) = &mut self.fetch_rx {
             while let Ok(update) = rx.try_recv() {
@@ -170,6 +172,7 @@ impl App {
                     FetchUpdate::NewsUpdated(items) => {
                         self.news = items;
                         self.errors.news = None;
+                        news_updated = true;
                     }
                     FetchUpdate::WeatherUpdated(data, source) => {
                         self.weather = Some(data);
@@ -191,6 +194,10 @@ impl App {
                     }
                 }
             }
+        }
+
+        if news_updated {
+            self.process_news_mentions();
         }
 
         if should_complete {
@@ -362,6 +369,34 @@ impl App {
             self.selected_date = None;
             self.start_fetch();
         }
+    }
+
+    /// Process news items and extract stock mentions
+    pub fn process_news_mentions(&self) {
+        if let Ok(db) = self.db.lock() {
+            for news in &self.news {
+                if let Some(news_id) = news.id {
+                    let symbols = extract_symbols(&news.headline);
+                    for symbol in symbols {
+                        let _ = db.add_stock_mention(news_id, &symbol);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Get symbols mentioned in recent news that aren't in watchlist
+    pub fn get_suggested_stocks(&self) -> Vec<String> {
+        if let Ok(db) = self.db.lock() {
+            if let Ok(mentioned) = db.get_recently_mentioned_symbols(20) {
+                return mentioned
+                    .into_iter()
+                    .filter(|s| !self.watchlist.contains(s))
+                    .take(5)
+                    .collect();
+            }
+        }
+        Vec::new()
     }
 }
 
