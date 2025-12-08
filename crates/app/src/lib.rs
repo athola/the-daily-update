@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
 use api::stocks::StocksClient;
+use chrono::NaiveDate;
 use config::settings::Config;
 use data::db::Database;
 use data::models::{AvailableStock, NewsItem, StockData, WeatherData};
@@ -45,6 +46,8 @@ pub struct App {
     pub errors: PanelErrors,
     /// Channel receiver for fetch updates
     pub fetch_rx: Option<mpsc::Receiver<FetchUpdate>>,
+    /// Selected date for news filtering (None = today)
+    pub selected_date: Option<NaiveDate>,
 }
 
 /// Which panel is currently active
@@ -132,6 +135,7 @@ impl App {
             offline: false,
             errors: PanelErrors::default(),
             fetch_rx: None,
+            selected_date: None,
         }
     }
 
@@ -163,7 +167,7 @@ impl App {
                         self.news = items;
                         self.errors.news = None;
                     }
-                    FetchUpdate::WeatherUpdated(data) => {
+                    FetchUpdate::WeatherUpdated(data, _source) => {
                         self.weather = Some(data);
                         self.errors.weather = None;
                     }
