@@ -3,6 +3,16 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+/// Source of weather data context
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum WeatherSource {
+    /// Weather for user's default configured location
+    #[default]
+    Default,
+    /// Weather extracted from news context
+    NewsContext,
+}
+
 /// A news headline from NewsAPI
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewsItem {
@@ -369,5 +379,27 @@ mod tests {
             serde_json::from_str(json).expect("Deserialization should succeed");
         assert_eq!(mention.news_id, 42);
         assert_eq!(mention.symbol, "GOOGL");
+    }
+
+    // ============================================================
+    // WeatherSource Tests
+    // ============================================================
+
+    #[test]
+    fn given_weather_source_default_when_serialized_then_is_default() {
+        let source = WeatherSource::Default;
+        let json = serde_json::to_string(&source).expect("Serialization should succeed");
+        assert!(json.contains("Default"));
+    }
+
+    #[test]
+    fn given_weather_source_news_context_when_compared_then_not_equal_to_default() {
+        assert_ne!(WeatherSource::NewsContext, WeatherSource::Default);
+    }
+
+    #[test]
+    fn given_weather_source_when_default_trait_used_then_is_default() {
+        let source: WeatherSource = Default::default();
+        assert_eq!(source, WeatherSource::Default);
     }
 }
