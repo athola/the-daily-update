@@ -198,6 +198,7 @@ impl App {
 
         if news_updated {
             self.process_news_mentions();
+            self.auto_populate_watchlist();
         }
 
         if should_complete {
@@ -397,6 +398,40 @@ impl App {
             }
         }
         Vec::new()
+    }
+
+    /// Auto-add frequently mentioned stocks to watchlist
+    /// Only adds stocks that appear in 2+ headlines and aren't already in watchlist
+    pub fn auto_populate_watchlist(&mut self) {
+        // Count mentions per symbol
+        let mut mention_counts: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
+
+        for news in &self.news {
+            let symbols = extract_symbols(&news.headline);
+            for symbol in symbols {
+                // Skip default SPY - only add explicitly mentioned companies
+                if symbol != "SPY" {
+                    *mention_counts.entry(symbol).or_insert(0) += 1;
+                }
+            }
+        }
+
+        // Add stocks mentioned 2+ times that aren't in watchlist
+        let to_add: Vec<String> = mention_counts
+            .into_iter()
+            .filter(|(symbol, count)| *count >= 2 && !self.watchlist.contains(symbol))
+            .map(|(symbol, _)| symbol)
+            .collect();
+
+        if !to_add.is_empty() {
+            if let Ok(db) = self.db.lock() {
+                for symbol in &to_add {
+                    let _ = db.add_to_watchlist(symbol);
+                }
+            }
+            self.watchlist.extend(to_add);
+        }
     }
 }
 
