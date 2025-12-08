@@ -74,9 +74,20 @@ impl Database {
                 display_order INTEGER DEFAULT 0
             );
 
+            CREATE TABLE IF NOT EXISTS news_stock_mentions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                news_id INTEGER NOT NULL,
+                symbol TEXT NOT NULL,
+                mentioned_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (news_id) REFERENCES news(id) ON DELETE CASCADE,
+                UNIQUE(news_id, symbol)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_news_published ON news(published_at);
             CREATE INDEX IF NOT EXISTS idx_weather_location ON weather(location);
             CREATE INDEX IF NOT EXISTS idx_stocks_symbol ON stocks(symbol);
+            CREATE INDEX IF NOT EXISTS idx_mentions_news_id ON news_stock_mentions(news_id);
+            CREATE INDEX IF NOT EXISTS idx_mentions_symbol ON news_stock_mentions(symbol);
             "#,
         )?;
         Ok(())
