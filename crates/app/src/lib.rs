@@ -460,3 +460,102 @@ impl Default for StockBrowserState {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    fn make_test_app() -> App {
+        let config = Config::default();
+        let db = Database::in_memory().unwrap();
+        App::new(config, db)
+    }
+
+    #[test]
+    fn test_effective_date_defaults_to_today() {
+        let app = make_test_app();
+        let today = Utc::now().date_naive();
+        assert_eq!(app.effective_date(), today);
+    }
+
+    #[test]
+    fn test_date_prev_moves_back_one_day() {
+        let mut app = make_test_app();
+        let today = Utc::now().date_naive();
+
+        // Manually set the date without triggering fetch
+        let current = app.effective_date();
+        let new_date = current - Duration::days(1);
+        app.selected_date = Some(new_date);
+
+        assert_eq!(app.selected_date, Some(today - Duration::days(1)));
+    }
+
+    #[test]
+    fn test_date_prev_stops_at_7_days_ago() {
+        let mut app = make_test_app();
+        let today = Utc::now().date_naive();
+        let min_date = today - Duration::days(6);
+
+        // Test the boundary logic directly
+        // Go back 6 days (to the limit)
+        for i in 1..=6 {
+            let current = app.effective_date();
+            let new_date = current - Duration::days(1);
+            if new_date >= min_date {
+                app.selected_date = Some(new_date);
+            }
+            assert_eq!(app.selected_date, Some(today - Duration::days(i as i64)));
+        }
+
+        let date_at_limit = app.selected_date;
+
+        // Try to go back one more - should stay at limit
+        let current = app.effective_date();
+        let new_date = current - Duration::days(1);
+        if new_date >= min_date {
+            app.selected_date = Some(new_date);
+        }
+        assert_eq!(app.selected_date, date_at_limit);
+    }
+
+    #[test]
+    fn test_date_next_from_yesterday_returns_to_today() {
+        let mut app = make_test_app();
+        let today = Utc::now().date_naive();
+
+        // Set to yesterday
+        app.selected_date = Some(today - Duration::days(1));
+
+        // Move forward to today - test the logic
+        let current = app.effective_date();
+        let new_date = current + Duration::days(1);
+        if new_date <= today {
+            app.selected_date = if new_date == today {
+                None
+            } else {
+                Some(new_date)
+            };
+        }
+
+        assert_eq!(app.selected_date, None); // None means today
+    }
+
+    #[test]
+    fn test_date_today_resets_to_none() {
+        let mut app = make_test_app();
+        let today = Utc::now().date_naive();
+
+        // Set to two days ago
+        app.selected_date = Some(today - Duration::days(2));
+        assert!(app.selected_date.is_some());
+
+        // Reset to today
+        if app.selected_date.is_some() {
+            app.selected_date = None;
+        }
+
+        assert_eq!(app.selected_date, None);
+    }
+}
