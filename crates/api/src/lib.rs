@@ -34,7 +34,10 @@ impl ApiKey {
         }
 
         // Basic validation: alphanumeric, hyphens, and underscores only
-        if !key.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+        if !key
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        {
             return Err(ApiKeyError::InvalidCharacters);
         }
 
@@ -71,7 +74,7 @@ impl std::fmt::Display for ApiKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Mask the key for security in logs/display
         if self.0.len() > 8 {
-            write!(f, "{}...{}", &self.0[..4], &self.0[self.0.len()-4..])
+            write!(f, "{}...{}", &self.0[..4], &self.0[self.0.len() - 4..])
         } else {
             write!(f, "****")
         }

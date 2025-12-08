@@ -78,7 +78,9 @@ impl StocksClient {
         let tickers = symbols.join(",");
         let url = format!(
             "{}?tickers={}&token={}",
-            TIINGO_API_BASE, tickers, self.api_key.as_str()
+            TIINGO_API_BASE,
+            tickers,
+            self.api_key.as_str()
         );
 
         let response = self.client.get(&url).send().await?;

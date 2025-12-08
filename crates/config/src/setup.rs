@@ -68,10 +68,7 @@ pub fn run_setup_wizard(config: &mut Config) -> Result<()> {
     println!();
     println!("Enter your default location for weather.");
     println!("  Format: City, State (e.g., New York, NY or London, UK)");
-    print!(
-        "  Location [{}]: ",
-        config.general.default_location
-    );
+    print!("  Location [{}]: ", config.general.default_location);
     io::stdout().flush()?;
 
     let mut input = String::new();

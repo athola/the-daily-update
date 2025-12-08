@@ -114,13 +114,22 @@ fn contains_word(text: &str, word: &str) -> bool {
         let char_pos = text[..byte_pos].chars().count();
 
         // Check character before the match
-        let before_ok = char_pos == 0 || !text.chars().nth(char_pos - 1).unwrap_or(' ').is_alphanumeric();
+        let before_ok = char_pos == 0
+            || !text
+                .chars()
+                .nth(char_pos - 1)
+                .unwrap_or(' ')
+                .is_alphanumeric();
 
         // Check character after the match
         let word_char_len = word.chars().count();
         let after_char_pos = char_pos + word_char_len;
         let after_ok = after_char_pos >= text.chars().count()
-            || !text.chars().nth(after_char_pos).unwrap_or(' ').is_alphanumeric();
+            || !text
+                .chars()
+                .nth(after_char_pos)
+                .unwrap_or(' ')
+                .is_alphanumeric();
 
         before_ok && after_ok
     } else {
