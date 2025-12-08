@@ -3,8 +3,8 @@
 //! Provides a static mapping of well-known company names to their stock symbols.
 //! Uses case-insensitive matching with word boundary detection.
 
-use std::collections::HashMap;
 use once_cell::sync::Lazy;
+use std::collections::HashMap;
 
 /// Static mapping of company names/keywords to stock symbols
 static COMPANY_TICKERS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
@@ -109,10 +109,19 @@ pub fn extract_symbols(headline: &str) -> Vec<String> {
 /// Check if text contains a word (with word boundaries)
 fn contains_word(text: &str, word: &str) -> bool {
     // Simple word boundary check using character inspection
-    if let Some(pos) = text.find(word) {
-        let before_ok = pos == 0 || !text.chars().nth(pos - 1).unwrap_or(' ').is_alphanumeric();
-        let after_pos = pos + word.len();
-        let after_ok = after_pos >= text.len() || !text.chars().nth(after_pos).unwrap_or(' ').is_alphanumeric();
+    if let Some(byte_pos) = text.find(word) {
+        // Convert byte position to character index for proper Unicode handling
+        let char_pos = text[..byte_pos].chars().count();
+
+        // Check character before the match
+        let before_ok = char_pos == 0 || !text.chars().nth(char_pos - 1).unwrap_or(' ').is_alphanumeric();
+
+        // Check character after the match
+        let word_char_len = word.chars().count();
+        let after_char_pos = char_pos + word_char_len;
+        let after_ok = after_char_pos >= text.chars().count()
+            || !text.chars().nth(after_char_pos).unwrap_or(' ').is_alphanumeric();
+
         before_ok && after_ok
     } else {
         false
@@ -165,5 +174,11 @@ mod tests {
     fn given_duplicate_mentions_when_extracted_then_unique_list() {
         let symbols = extract_symbols("Apple iPhone and Apple Mac both updated");
         assert_eq!(symbols.iter().filter(|s| *s == "AAPL").count(), 1);
+    }
+
+    #[test]
+    fn given_headline_with_unicode_when_extracted_then_matches() {
+        let symbols = extract_symbols("café Apple reports earnings");
+        assert!(symbols.contains(&"AAPL".to_string()));
     }
 }
