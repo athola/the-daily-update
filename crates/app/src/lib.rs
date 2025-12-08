@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
 use api::stocks::StocksClient;
-use chrono::NaiveDate;
+use chrono::{Duration, NaiveDate};
 use config::settings::Config;
 use data::db::Database;
 use data::models::{AvailableStock, NewsItem, StockData, WeatherData, WeatherSource};
@@ -318,6 +318,44 @@ impl App {
             Panel::News => Panel::Stocks,
             Panel::Stocks => Panel::News,
         };
+    }
+
+    /// Get the effective date for news filtering (today if None)
+    pub fn effective_date(&self) -> NaiveDate {
+        self.selected_date.unwrap_or_else(|| chrono::Utc::now().date_naive())
+    }
+
+    /// Navigate to previous day (up to 7 days ago)
+    pub fn date_prev(&mut self) {
+        let today = chrono::Utc::now().date_naive();
+        let min_date = today - Duration::days(6);
+        let current = self.effective_date();
+        let new_date = current - Duration::days(1);
+
+        if new_date >= min_date {
+            self.selected_date = Some(new_date);
+            self.start_fetch();
+        }
+    }
+
+    /// Navigate to next day (up to today)
+    pub fn date_next(&mut self) {
+        let today = chrono::Utc::now().date_naive();
+        let current = self.effective_date();
+        let new_date = current + Duration::days(1);
+
+        if new_date <= today {
+            self.selected_date = if new_date == today { None } else { Some(new_date) };
+            self.start_fetch();
+        }
+    }
+
+    /// Reset to today's date
+    pub fn date_today(&mut self) {
+        if self.selected_date.is_some() {
+            self.selected_date = None;
+            self.start_fetch();
+        }
     }
 }
 
