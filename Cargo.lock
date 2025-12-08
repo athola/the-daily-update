@@ -41,6 +41,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "data",
+ "once_cell",
  "reqwest",
  "serde",
  "serde_json",
@@ -54,6 +55,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "api",
+ "chrono",
  "config",
  "crossterm",
  "data",

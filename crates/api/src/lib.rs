@@ -1,5 +1,6 @@
 //! External API clients
 
+pub mod company_mapping;
 pub mod location;
 pub mod news;
 pub mod stocks;
