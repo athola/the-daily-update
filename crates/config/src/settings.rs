@@ -39,7 +39,7 @@ pub struct ApiConfig {
 }
 
 fn default_location() -> String {
-    "New York, NY".to_string()
+    "New York,US".to_string()
 }
 
 fn default_theme() -> String {
@@ -167,7 +167,7 @@ mod tests {
     fn given_default_config_then_has_expected_general_settings() {
         let config = Config::default();
 
-        assert_eq!(config.general.default_location, "New York, NY");
+        assert_eq!(config.general.default_location, "New York,US");
         assert!(!config.general.vim_mode);
     }
 
@@ -191,7 +191,7 @@ mod tests {
     fn given_default_general_config_then_has_expected_values() {
         let general = GeneralConfig::default();
 
-        assert_eq!(general.default_location, "New York, NY");
+        assert_eq!(general.default_location, "New York,US");
         assert!(!general.vim_mode);
     }
 
@@ -323,7 +323,7 @@ mod tests {
         let toml_str = toml::to_string(&config).expect("Serialization should succeed");
 
         assert!(toml_str.contains("default_location"));
-        assert!(toml_str.contains("New York, NY"));
+        assert!(toml_str.contains("New York,US"));
         assert!(toml_str.contains("vim_mode"));
         assert!(toml_str.contains("theme"));
     }
@@ -376,7 +376,7 @@ mod tests {
         assert!(config.general.vim_mode);
 
         // Default values for unspecified fields
-        assert_eq!(config.general.default_location, "New York, NY");
+        assert_eq!(config.general.default_location, "New York,US");
         assert_eq!(config.ui.theme, "dark");
     }
 
@@ -386,7 +386,7 @@ mod tests {
 
         let config: Config = toml::from_str(toml_str).expect("Deserialization should succeed");
 
-        assert_eq!(config.general.default_location, "New York, NY");
+        assert_eq!(config.general.default_location, "New York,US");
         assert!(!config.general.vim_mode);
         assert_eq!(config.ui.theme, "dark");
         assert!(config.apis.news_api_key.is_none());
