@@ -90,7 +90,8 @@ impl NewsClient {
         category: Option<&str>,
         page_size: Option<u32>,
     ) -> Result<Vec<NewsItem>, NewsApiError> {
-        self.fetch_top_headlines_with_date(country, category, page_size, None).await
+        self.fetch_top_headlines_with_date(country, category, page_size, None)
+            .await
     }
 
     /// Fetch top headlines with optional date filtering
@@ -160,10 +161,8 @@ impl NewsClient {
             };
 
             // Extract location from headline and description
-            let location = extract_location_from_news(
-                &article.title,
-                article.description.as_deref(),
-            );
+            let location =
+                extract_location_from_news(&article.title, article.description.as_deref());
 
             news_items.push(NewsItem {
                 id: None, // Will be set when saved to database
@@ -196,5 +195,13 @@ mod tests {
         let api_key = ApiKey::from_trusted("my-news-key".to_string());
         let client = NewsClient::new(api_key);
         assert_eq!(client.api_key.as_str(), "my-news-key");
+    }
+
+    #[test]
+    fn test_extract_symbols_from_article() {
+        use crate::company_mapping::extract_symbols;
+        let title = "Tesla stock surges after earnings beat";
+        let symbols = extract_symbols(title);
+        assert!(symbols.contains(&"TSLA".to_string()));
     }
 }
