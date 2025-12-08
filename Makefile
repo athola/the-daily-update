@@ -3,7 +3,7 @@
 # Rust TUI application for news, weather, and stock aggregation
 # Uses Cargo workspace for modular compilation
 
-.PHONY: help lint test test-unit test-integration build clean check fmt all run
+.PHONY: help lint test test-unit test-integration build clean check fmt all run demo demo-info
 
 # Default target
 .DEFAULT_GOAL := help
@@ -61,6 +61,29 @@ release: ## Build the project in release mode
 
 clean: ## Clean build artifacts
 	cargo clean
+
+##@ Demo & Features
+
+demo: build ## Run the application (alias for run)
+	cargo run --package daily-update
+
+demo-info: ## Show feature keybindings for demos
+	@echo "$(CYAN)The Daily Update - Feature Demo$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)Date Navigation:$(RESET)"
+	@echo "  $(GREEN)←/→$(RESET) or $(GREEN)h/l$(RESET)  Navigate dates (past 7 days)"
+	@echo "  $(GREEN)d$(RESET)            Jump to today"
+	@echo ""
+	@echo "$(YELLOW)Navigation:$(RESET)"
+	@echo "  $(GREEN)↑/↓$(RESET) or $(GREEN)j/k$(RESET)  Navigate news headlines"
+	@echo "  $(GREEN)Tab$(RESET)          Switch panels"
+	@echo ""
+	@echo "$(YELLOW)Actions:$(RESET)"
+	@echo "  $(GREEN)r$(RESET)            Refresh data"
+	@echo "  $(GREEN)w$(RESET)            Toggle weather"
+	@echo "  $(GREEN)s$(RESET)            Stock browser"
+	@echo "  $(GREEN)?$(RESET)            Help overlay"
+	@echo "  $(GREEN)q$(RESET)            Quit"
 
 ##@ Quality Assurance
 
