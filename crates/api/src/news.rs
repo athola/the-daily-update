@@ -6,6 +6,7 @@ use reqwest::Client;
 use serde::Deserialize;
 use thiserror::Error;
 
+use crate::location::extract_location_from_news;
 use crate::ApiKey;
 
 const NEWS_API_BASE_URL: &str = "https://newsapi.org/v2";
@@ -158,13 +159,19 @@ impl NewsClient {
                 }
             };
 
+            // Extract location from headline and description
+            let location = extract_location_from_news(
+                &article.title,
+                article.description.as_deref(),
+            );
+
             news_items.push(NewsItem {
                 id: None, // Will be set when saved to database
                 headline: article.title,
                 source: Some(article.source.name),
-                description: article.description,
+                description: article.description.clone(),
                 url: Some(article.url),
-                location: None, // Location extraction is a future enhancement
+                location,
                 published_at,
                 fetched_at,
             });
