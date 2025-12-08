@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use std::path::Path;
 
-use super::models::{NewsItem, StockData, WatchlistItem, WeatherData};
+use super::models::{NewsItem, NewsStockMention, StockData, WatchlistItem, WeatherData};
 
 /// Database wrapper
 pub struct Database {
@@ -317,6 +317,66 @@ impl Database {
             |row| row.get(0),
         )?;
         Ok(count > 0)
+    }
+
+    // === News Stock Mention Operations ===
+
+    /// Add a stock mention for a news item
+    pub fn add_stock_mention(&self, news_id: i64, symbol: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO news_stock_mentions (news_id, symbol, mentioned_at)
+             VALUES (?1, ?2, ?3)",
+            params![news_id, symbol, Utc::now().to_rfc3339()],
+        )?;
+        Ok(())
+    }
+
+    /// Get all mentions for a news item
+    pub fn get_mentions_for_news(&self, news_id: i64) -> Result<Vec<NewsStockMention>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, news_id, symbol, mentioned_at
+             FROM news_stock_mentions WHERE news_id = ?1",
+        )?;
+
+        let mentions = stmt
+            .query_map([news_id], |row| {
+                Ok(NewsStockMention {
+                    id: Some(row.get(0)?),
+                    news_id: row.get(1)?,
+                    symbol: row.get(2)?,
+                    mentioned_at: parse_datetime(row.get::<_, String>(3)?),
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(mentions)
+    }
+
+    /// Get all news IDs that mention a symbol
+    pub fn get_news_for_symbol(&self, symbol: &str) -> Result<Vec<i64>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT news_id FROM news_stock_mentions WHERE symbol = ?1")?;
+
+        let ids = stmt
+            .query_map([symbol], |row| row.get(0))?
+            .collect::<Result<Vec<i64>, _>>()?;
+
+        Ok(ids)
+    }
+
+    /// Get unique symbols mentioned in recent news
+    pub fn get_recently_mentioned_symbols(&self, limit: usize) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT DISTINCT symbol FROM news_stock_mentions
+             ORDER BY mentioned_at DESC LIMIT ?1",
+        )?;
+
+        let symbols = stmt
+            .query_map([limit], |row| row.get(0))?
+            .collect::<Result<Vec<String>, _>>()?;
+
+        Ok(symbols)
     }
 }
 
@@ -898,6 +958,86 @@ mod tests {
 
         assert!(!db.is_in_watchlist("GOOGL").unwrap());
         assert!(!db.is_in_watchlist("").unwrap());
+    }
+
+    // ============================================================
+    // News Stock Mention Tests
+    // ============================================================
+
+    #[test]
+    fn given_news_item_when_mention_added_then_can_be_retrieved() {
+        let db = Database::in_memory().unwrap();
+        let news = create_test_news_item("Apple announces new iPhone");
+        let news_id = db.insert_news(&news).unwrap();
+
+        db.add_stock_mention(news_id, "AAPL").unwrap();
+
+        let mentions = db.get_mentions_for_news(news_id).unwrap();
+        assert_eq!(mentions.len(), 1);
+        assert_eq!(mentions[0].symbol, "AAPL");
+    }
+
+    #[test]
+    fn given_duplicate_mention_when_added_then_ignored() {
+        let db = Database::in_memory().unwrap();
+        let news = create_test_news_item("Apple stock rises");
+        let news_id = db.insert_news(&news).unwrap();
+
+        db.add_stock_mention(news_id, "AAPL").unwrap();
+        db.add_stock_mention(news_id, "AAPL").unwrap(); // Duplicate
+
+        let mentions = db.get_mentions_for_news(news_id).unwrap();
+        assert_eq!(mentions.len(), 1, "Duplicate should be ignored");
+    }
+
+    #[test]
+    fn given_symbol_when_getting_news_mentions_then_returns_matching_news() {
+        let db = Database::in_memory().unwrap();
+
+        let apple_news = create_test_news_item("Apple earnings beat expectations");
+        let google_news = create_test_news_item("Google AI breakthrough");
+        let mixed_news = create_test_news_item("Tech giants Apple and Google compete");
+
+        let apple_id = db.insert_news(&apple_news).unwrap();
+        let google_id = db.insert_news(&google_news).unwrap();
+        let mixed_id = db.insert_news(&mixed_news).unwrap();
+
+        db.add_stock_mention(apple_id, "AAPL").unwrap();
+        db.add_stock_mention(google_id, "GOOGL").unwrap();
+        db.add_stock_mention(mixed_id, "AAPL").unwrap();
+        db.add_stock_mention(mixed_id, "GOOGL").unwrap();
+
+        let apple_mentions = db.get_news_for_symbol("AAPL").unwrap();
+        assert_eq!(apple_mentions.len(), 2);
+    }
+
+    #[test]
+    fn given_no_mentions_when_getting_unique_symbols_then_returns_empty() {
+        let db = Database::in_memory().unwrap();
+        let symbols = db.get_recently_mentioned_symbols(10).unwrap();
+        assert!(symbols.is_empty());
+    }
+
+    #[test]
+    fn given_mentions_when_getting_unique_symbols_then_returns_distinct_list() {
+        let db = Database::in_memory().unwrap();
+
+        let news1 = create_test_news_item("Apple news");
+        let news2 = create_test_news_item("Google news");
+        let news3 = create_test_news_item("More Apple news");
+
+        let id1 = db.insert_news(&news1).unwrap();
+        let id2 = db.insert_news(&news2).unwrap();
+        let id3 = db.insert_news(&news3).unwrap();
+
+        db.add_stock_mention(id1, "AAPL").unwrap();
+        db.add_stock_mention(id2, "GOOGL").unwrap();
+        db.add_stock_mention(id3, "AAPL").unwrap();
+
+        let symbols = db.get_recently_mentioned_symbols(10).unwrap();
+        assert_eq!(symbols.len(), 2);
+        assert!(symbols.contains(&"AAPL".to_string()));
+        assert!(symbols.contains(&"GOOGL".to_string()));
     }
 
     // ============================================================
