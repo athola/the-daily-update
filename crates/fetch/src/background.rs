@@ -3,6 +3,7 @@
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
+use api::location::extract_location_from_news;
 use api::news::NewsClient;
 use api::stocks::StocksClient;
 use api::weather::WeatherClient;
@@ -100,16 +101,37 @@ impl BackgroundFetcher {
             }
         }
 
-        // Fetch weather
+        // Fetch weather - try to use location from first news item
         if let Some(client) = &self.weather_client {
-            let location = &self.config.general.default_location;
-            match client.fetch_weather(location).await {
+            // Determine location: try news context first, fall back to default
+            let (location, source) = {
+                // Try to get location from first news item
+                let news_location = if let Ok(db_guard) = db.lock() {
+                    db_guard.get_news(1).ok().and_then(|items| {
+                        items.first().and_then(|item| {
+                            extract_location_from_news(
+                                &item.headline,
+                                item.description.as_deref(),
+                            )
+                        })
+                    })
+                } else {
+                    None
+                };
+
+                match news_location {
+                    Some(loc) => (loc, WeatherSource::NewsContext),
+                    None => (self.config.general.default_location.clone(), WeatherSource::Default),
+                }
+            };
+
+            match client.fetch_weather(&location).await {
                 Ok(data) => {
                     // Store in database
                     if let Ok(db) = db.lock() {
                         let _ = db.upsert_weather(&data);
                     }
-                    let _ = tx.send(FetchUpdate::WeatherUpdated(data, WeatherSource::Default)).await;
+                    let _ = tx.send(FetchUpdate::WeatherUpdated(data, source)).await;
                 }
                 Err(e) => {
                     let _ = tx
