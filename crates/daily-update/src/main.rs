@@ -135,6 +135,13 @@ async fn run_app<B: ratatui::backend::Backend>(
                     KeyCode::Tab => app.next_panel(),
                     KeyCode::BackTab => app.next_panel(), // Same as Tab for now
 
+                    // Date navigation
+                    KeyCode::Left => app.date_prev(),
+                    KeyCode::Right => app.date_next(),
+                    KeyCode::Char('h') if app.config.general.vim_mode => app.date_prev(),
+                    KeyCode::Char('l') if app.config.general.vim_mode => app.date_next(),
+                    KeyCode::Char('d') => app.date_today(),
+
                     // Navigation
                     KeyCode::Up => app.news_prev(),
                     KeyCode::Down => app.news_next(),
