@@ -16,8 +16,8 @@ members = [
 ratatui = "0.29"
 crossterm = "0.28"
 
-# Async runtime
-tokio = { version = "1.41", features = ["full"] }
+# Async runtime (minimal features needed: runtime, macros for #[tokio::main], sync for mpsc)
+tokio = { version = "1.41", features = ["rt-multi-thread", "macros", "sync"] }
 
 # Database
 rusqlite = { version = "0.32", features = ["bundled"] }

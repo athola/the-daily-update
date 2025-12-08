@@ -21,7 +21,7 @@ pub fn display_security_guidance() {
     println!("│  ✓ Use environment variables (recommended)             │");
     println!("│    export NEWS_API_KEY=\"your-key\"                      │");
     println!("│                                                        │");
-    println!("│  ✓ Or use a .env file (add to .gitignore)             │");
+    println!("│  ✓ Or use a .env file (add to .gitignore)              │");
     println!("│                                                        │");
     println!("│  ✗ Avoid committing keys to version control            │");
     println!("│  ✗ Don't share config files containing keys            │");
@@ -64,10 +64,12 @@ pub fn run_setup_wizard(config: &mut Config) -> Result<()> {
         }
     }
 
-    // Prompt for default location
+    // Prompt for default location with format guidance
     println!();
+    println!("Enter your default location for weather.");
+    println!("  Format: City, State (e.g., New York, NY or London, UK)");
     print!(
-        "Enter your default location for weather [{}]: ",
+        "  Location [{}]: ",
         config.general.default_location
     );
     io::stdout().flush()?;
@@ -77,7 +79,9 @@ pub fn run_setup_wizard(config: &mut Config) -> Result<()> {
     let input = input.trim();
 
     if !input.is_empty() {
-        config.general.default_location = input.to_string();
+        // Clean up common input variations
+        let cleaned = clean_location_input(input);
+        config.general.default_location = cleaned;
     }
 
     // Ask about vim mode
@@ -126,10 +130,42 @@ fn prompt_for_api_keys(config: &mut Config, missing: &[&str]) -> Result<()> {
     Ok(())
 }
 
+/// Clean up user-provided location input
+///
+/// Attempts to normalize common variations:
+/// - Trims whitespace
+/// - Normalizes multiple spaces to single space
+/// - Handles "city state" vs "city, state" formats
+fn clean_location_input(input: &str) -> String {
+    let input = input.trim();
+
+    // Normalize whitespace
+    let parts: Vec<&str> = input.split_whitespace().collect();
+
+    if parts.is_empty() {
+        return input.to_string();
+    }
+
+    // If there's no comma but there's a potential state abbreviation at the end
+    if !input.contains(',') && parts.len() >= 2 {
+        let last = parts.last().unwrap();
+        // Check if last part looks like a state/country code (2-3 uppercase letters)
+        if last.len() <= 3 && last.chars().all(|c| c.is_alphabetic()) {
+            // Insert comma before the state code
+            let city_parts = &parts[..parts.len() - 1];
+            let city = city_parts.join(" ");
+            return format!("{}, {}", city, last.to_uppercase());
+        }
+    }
+
+    // Just normalize whitespace
+    parts.join(" ")
+}
+
 /// Display startup banner
 pub fn display_banner() {
     println!();
     println!("╔═════════════════════════════════════════╗");
-    println!("║       The Daily Update v0.1.0         ║");
+    println!("║       The Daily Update v0.1.0           ║");
     println!("╚═════════════════════════════════════════╝");
 }

@@ -197,12 +197,6 @@ pre-commit install
 
 The hooks run rustfmt, clippy, and tests automatically.
 
-### Code Style
-
-- Format with `cargo fmt` before committing
-- All clippy warnings are treated as errors (`-D warnings`)
-- Tests follow BDD naming: `given_X_when_Y_then_Z`
-
 ## License
 
 MIT

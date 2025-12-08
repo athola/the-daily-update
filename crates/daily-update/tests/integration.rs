@@ -64,6 +64,7 @@ fn given_app_and_database_when_managing_news_then_navigation_works() {
             source: Some("Test Source".to_string()),
             description: None,
             url: None,
+            location: None,
             published_at: Utc::now(),
             fetched_at: Utc::now(),
         };
@@ -170,6 +171,7 @@ fn given_fresh_database_when_full_data_flow_then_all_data_persists() {
         source: Some("Test Suite".to_string()),
         description: Some("Full integration test".to_string()),
         url: Some("https://test.example.com".to_string()),
+        location: None,
         published_at: Utc::now(),
         fetched_at: Utc::now(),
     };
@@ -228,6 +230,7 @@ fn given_multiple_data_types_when_clearing_news_then_other_data_preserved() {
         source: None,
         description: None,
         url: None,
+        location: None,
         published_at: Utc::now(),
         fetched_at: Utc::now(),
     };
@@ -464,6 +467,7 @@ fn given_app_at_first_item_when_navigating_prev_then_wraps_to_end() {
             source: None,
             description: None,
             url: None,
+            location: None,
             published_at: Utc::now(),
             fetched_at: Utc::now(),
         };
@@ -500,6 +504,7 @@ fn given_full_app_session_when_simulating_user_workflow_then_all_operations_succ
             source: Some("Source".to_string()),
             description: None,
             url: None,
+            location: None,
             published_at: Utc::now(),
             fetched_at: Utc::now(),
         };

@@ -41,6 +41,7 @@ impl Database {
                 source TEXT,
                 description TEXT,
                 url TEXT,
+                location TEXT,
                 published_at TEXT NOT NULL,
                 fetched_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
@@ -86,13 +87,14 @@ impl Database {
     /// Insert a news item
     pub fn insert_news(&self, item: &NewsItem) -> Result<i64> {
         self.conn.execute(
-            "INSERT INTO news (headline, source, description, url, published_at, fetched_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO news (headline, source, description, url, location, published_at, fetched_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 item.headline,
                 item.source,
                 item.description,
                 item.url,
+                item.location,
                 item.published_at.to_rfc3339(),
                 item.fetched_at.to_rfc3339(),
             ],
@@ -103,7 +105,7 @@ impl Database {
     /// Get recent news items
     pub fn get_news(&self, limit: usize) -> Result<Vec<NewsItem>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, headline, source, description, url, published_at, fetched_at
+            "SELECT id, headline, source, description, url, location, published_at, fetched_at
              FROM news ORDER BY published_at DESC LIMIT ?1",
         )?;
 
@@ -115,8 +117,9 @@ impl Database {
                     source: row.get(2)?,
                     description: row.get(3)?,
                     url: row.get(4)?,
-                    published_at: parse_datetime(row.get::<_, String>(5)?),
-                    fetched_at: parse_datetime(row.get::<_, String>(6)?),
+                    location: row.get(5)?,
+                    published_at: parse_datetime(row.get::<_, String>(6)?),
+                    fetched_at: parse_datetime(row.get::<_, String>(7)?),
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -382,6 +385,7 @@ mod tests {
             source: Some("Reuters".to_string()),
             description: Some("Important news description".to_string()),
             url: Some("https://reuters.com/article".to_string()),
+            location: Some("New York".to_string()),
             published_at: Utc::now(),
             fetched_at: Utc::now(),
         };
@@ -396,6 +400,7 @@ mod tests {
             Some("Important news description".to_string())
         );
         assert_eq!(news[0].url, Some("https://reuters.com/article".to_string()));
+        assert_eq!(news[0].location, Some("New York".to_string()));
     }
 
     #[test]
@@ -407,6 +412,7 @@ mod tests {
             source: None,
             description: None,
             url: None,
+            location: None,
             published_at: Utc::now(),
             fetched_at: Utc::now(),
         };
@@ -418,6 +424,7 @@ mod tests {
         assert!(news[0].source.is_none());
         assert!(news[0].description.is_none());
         assert!(news[0].url.is_none());
+        assert!(news[0].location.is_none());
     }
 
     #[test]
@@ -432,6 +439,7 @@ mod tests {
             source: None,
             description: None,
             url: None,
+            location: None,
             published_at: now - Duration::hours(2),
             fetched_at: now,
         };
@@ -441,6 +449,7 @@ mod tests {
             source: None,
             description: None,
             url: None,
+            location: None,
             published_at: now,
             fetched_at: now,
         };
@@ -450,6 +459,7 @@ mod tests {
             source: None,
             description: None,
             url: None,
+            location: None,
             published_at: now - Duration::hours(1),
             fetched_at: now,
         };
@@ -890,6 +900,7 @@ mod tests {
             source: Some("Test Source".to_string()),
             description: Some("Test description".to_string()),
             url: Some("https://example.com".to_string()),
+            location: None,
             published_at: Utc::now(),
             fetched_at: Utc::now(),
         }

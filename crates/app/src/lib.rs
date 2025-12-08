@@ -33,6 +33,8 @@ pub struct App {
     pub weather_expanded: bool,
     /// Whether stock browser modal is open
     pub stock_browser_open: bool,
+    /// Whether help overlay is open
+    pub help_open: bool,
     /// Stock browser state
     pub stock_browser: StockBrowserState,
     /// Whether data is currently being fetched
@@ -74,21 +76,29 @@ impl App {
         let db = Arc::new(Mutex::new(db));
 
         // Load initial data from database
-        let (news, weather, stocks, watchlist) = {
-            let db = db.lock().unwrap();
-            let news = db.get_news(10).unwrap_or_default();
-            let weather = db
-                .get_weather(&config.general.default_location)
-                .ok()
-                .flatten();
-            let watchlist = db
-                .get_watchlist()
-                .unwrap_or_default()
-                .into_iter()
-                .map(|w| w.symbol)
-                .collect::<Vec<_>>();
-            let stocks = db.get_watchlist_stocks().unwrap_or_default();
-            (news, weather, stocks, watchlist)
+        // Note: lock() can fail if the mutex is poisoned (another thread panicked)
+        // We recover gracefully by using defaults if this happens
+        let (news, weather, stocks, watchlist) = match db.lock() {
+            Ok(db) => {
+                let news = db.get_news(10).unwrap_or_default();
+                let weather = db
+                    .get_weather(&config.general.default_location)
+                    .ok()
+                    .flatten();
+                let watchlist = db
+                    .get_watchlist()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|w| w.symbol)
+                    .collect::<Vec<_>>();
+                let stocks = db.get_watchlist_stocks().unwrap_or_default();
+                (news, weather, stocks, watchlist)
+            }
+            Err(_) => {
+                // Mutex poisoned - use defaults
+                eprintln!("Warning: Database mutex poisoned, using default data");
+                (Vec::new(), None, Vec::new(), Vec::new())
+            }
         };
 
         // Initialize watchlist with defaults if empty
@@ -116,6 +126,7 @@ impl App {
             active_panel: Panel::News,
             weather_expanded: false,
             stock_browser_open: false,
+            help_open: false,
             stock_browser: StockBrowserState::new(),
             fetching: false,
             offline: false,
@@ -187,6 +198,16 @@ impl App {
     /// Toggle weather widget expansion
     pub fn toggle_weather(&mut self) {
         self.weather_expanded = !self.weather_expanded;
+    }
+
+    /// Toggle help overlay visibility
+    pub fn toggle_help(&mut self) {
+        self.help_open = !self.help_open;
+    }
+
+    /// Close help overlay
+    pub fn close_help(&mut self) {
+        self.help_open = false;
     }
 
     /// Open stock browser modal

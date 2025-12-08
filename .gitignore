@@ -21,3 +21,6 @@ Thumbs.db
 config.toml
 .env
 .env.*
+
+# Design documents (LLM-generated plans)
+docs/plans/

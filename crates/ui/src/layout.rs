@@ -7,6 +7,7 @@ use ratatui::{
 
 use app::App;
 
+use super::help_overlay::render_help_overlay;
 use super::news_panel::render_news_panel;
 use super::stock_browser::render_stock_browser;
 use super::stocks_panel::render_stocks_panel;
@@ -39,8 +40,10 @@ pub fn render(frame: &mut Frame, app: &App) {
         render_stock_browser(frame, app, area);
     }
 
-    // Help overlay (if we add a help_open flag later)
-    // render_help_overlay(frame, app, area);
+    // Help overlay
+    if app.help_open {
+        render_help_overlay(frame, app, area);
+    }
 }
 
 /// Render the status bar

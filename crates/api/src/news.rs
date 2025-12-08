@@ -1,12 +1,15 @@
 //! NewsAPI client for fetching top headlines
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use data::models::NewsItem;
 use reqwest::Client;
 use serde::Deserialize;
 use thiserror::Error;
 
+use crate::ApiKey;
+
 const NEWS_API_BASE_URL: &str = "https://newsapi.org/v2";
+const USER_AGENT: &str = "TheDailyUpdate/0.1.0 (https://github.com/athola/the-daily-update)";
 
 #[derive(Debug, Error)]
 pub enum NewsApiError {
@@ -55,17 +58,22 @@ pub struct NewsApiSource {
 
 /// Client for interacting with NewsAPI
 pub struct NewsClient {
-    api_key: String,
+    api_key: ApiKey,
     client: Client,
 }
 
 impl NewsClient {
     /// Create a new NewsAPI client with the provided API key
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: ApiKey) -> Self {
         Self {
             api_key,
             client: Client::new(),
         }
+    }
+
+    /// Create a NewsClient from a raw string (for backwards compatibility)
+    pub fn from_string(api_key: String) -> Self {
+        Self::new(ApiKey::from_trusted(api_key))
     }
 
     /// Fetch top headlines from NewsAPI
@@ -74,15 +82,37 @@ impl NewsClient {
     /// * `country` - Optional country code (e.g., "us", "gb")
     /// * `category` - Optional category (e.g., "business", "technology")
     /// * `page_size` - Optional number of results to return (max 100)
+    /// * `from_date` - Optional date to filter articles from (inclusive)
     pub async fn fetch_top_headlines(
         &self,
         country: Option<&str>,
         category: Option<&str>,
         page_size: Option<u32>,
     ) -> Result<Vec<NewsItem>, NewsApiError> {
+        self.fetch_top_headlines_with_date(country, category, page_size, None).await
+    }
+
+    /// Fetch top headlines with optional date filtering
+    ///
+    /// # Arguments
+    /// * `country` - Optional country code (e.g., "us", "gb")
+    /// * `category` - Optional category (e.g., "business", "technology")
+    /// * `page_size` - Optional number of results to return (max 100)
+    /// * `from_date` - Optional date to filter articles from (inclusive)
+    pub async fn fetch_top_headlines_with_date(
+        &self,
+        country: Option<&str>,
+        category: Option<&str>,
+        page_size: Option<u32>,
+        from_date: Option<NaiveDate>,
+    ) -> Result<Vec<NewsItem>, NewsApiError> {
         let url = format!("{}/top-headlines", NEWS_API_BASE_URL);
 
-        let mut request = self.client.get(&url).header("X-Api-Key", &self.api_key);
+        let mut request = self
+            .client
+            .get(&url)
+            .header("X-Api-Key", self.api_key.as_str())
+            .header("User-Agent", USER_AGENT);
 
         // Add query parameters
         if let Some(country) = country {
@@ -93,6 +123,9 @@ impl NewsClient {
         }
         if let Some(page_size) = page_size {
             request = request.query(&[("pageSize", page_size.to_string())]);
+        }
+        if let Some(date) = from_date {
+            request = request.query(&[("from", date.format("%Y-%m-%d").to_string())]);
         }
 
         let response = request.send().await?;
@@ -131,6 +164,7 @@ impl NewsClient {
                 source: Some(article.source.name),
                 description: article.description,
                 url: Some(article.url),
+                location: None, // Location extraction is a future enhancement
                 published_at,
                 fetched_at,
             });
@@ -146,7 +180,14 @@ mod tests {
 
     #[test]
     fn test_news_client_creation() {
-        let client = NewsClient::new("test_api_key".to_string());
-        assert_eq!(client.api_key, "test_api_key");
+        let client = NewsClient::from_string("test_api_key".to_string());
+        assert_eq!(client.api_key.as_str(), "test_api_key");
+    }
+
+    #[test]
+    fn test_news_client_with_api_key() {
+        let api_key = ApiKey::from_trusted("my-news-key".to_string());
+        let client = NewsClient::new(api_key);
+        assert_eq!(client.api_key.as_str(), "my-news-key");
     }
 }

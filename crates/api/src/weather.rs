@@ -6,6 +6,8 @@ use reqwest::Client;
 use serde::Deserialize;
 use thiserror::Error;
 
+use crate::ApiKey;
+
 const WEATHER_API_BASE_URL: &str = "https://api.openweathermap.org/data/2.5";
 
 #[derive(Debug, Error)]
@@ -51,17 +53,22 @@ pub struct WeatherWind {
 
 /// Client for interacting with OpenWeatherMap API
 pub struct WeatherClient {
-    api_key: String,
+    api_key: ApiKey,
     client: Client,
 }
 
 impl WeatherClient {
     /// Create a new OpenWeatherMap client with the provided API key
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: ApiKey) -> Self {
         Self {
             api_key,
             client: Client::new(),
         }
+    }
+
+    /// Create a WeatherClient from a raw string (for backwards compatibility)
+    pub fn from_string(api_key: String) -> Self {
+        Self::new(ApiKey::from_trusted(api_key))
     }
 
     /// Fetch current weather data for a location
@@ -81,7 +88,7 @@ impl WeatherClient {
             .query(&[
                 ("q", location),
                 ("units", "imperial"),
-                ("appid", &self.api_key),
+                ("appid", self.api_key.as_str()),
             ])
             .send()
             .await?;
@@ -125,8 +132,15 @@ mod tests {
 
     #[test]
     fn test_weather_client_creation() {
-        let client = WeatherClient::new("test_api_key".to_string());
-        assert_eq!(client.api_key, "test_api_key");
+        let client = WeatherClient::from_string("test_api_key".to_string());
+        assert_eq!(client.api_key.as_str(), "test_api_key");
+    }
+
+    #[test]
+    fn test_weather_client_with_api_key() {
+        let api_key = ApiKey::from_trusted("my-weather-key".to_string());
+        let client = WeatherClient::new(api_key);
+        assert_eq!(client.api_key.as_str(), "my-weather-key");
     }
 
     #[test]

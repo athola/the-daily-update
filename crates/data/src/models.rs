@@ -11,6 +11,8 @@ pub struct NewsItem {
     pub source: Option<String>,
     pub description: Option<String>,
     pub url: Option<String>,
+    /// Location associated with this news item (for weather linking)
+    pub location: Option<String>,
     pub published_at: DateTime<Utc>,
     pub fetched_at: DateTime<Utc>,
 }
@@ -73,6 +75,7 @@ mod tests {
             source: Some("Reuters".to_string()),
             description: Some("Description".to_string()),
             url: Some("https://example.com".to_string()),
+            location: Some("New York".to_string()),
             published_at: chrono::Utc::now(),
             fetched_at: chrono::Utc::now(),
         };
@@ -80,6 +83,7 @@ mod tests {
         let json = serde_json::to_string(&item).expect("Serialization should succeed");
         assert!(json.contains("Test headline"));
         assert!(json.contains("Reuters"));
+        assert!(json.contains("New York"));
     }
 
     #[test]
@@ -90,6 +94,7 @@ mod tests {
             "source": "AP",
             "description": "News description",
             "url": "https://ap.com/article",
+            "location": "Washington DC",
             "published_at": "2024-01-15T10:00:00Z",
             "fetched_at": "2024-01-15T10:05:00Z"
         }"#;
@@ -98,6 +103,7 @@ mod tests {
         assert_eq!(item.headline, "Breaking news");
         assert_eq!(item.source, Some("AP".to_string()));
         assert_eq!(item.id, Some(1));
+        assert_eq!(item.location, Some("Washington DC".to_string()));
     }
 
     #[test]
@@ -108,6 +114,7 @@ mod tests {
             "source": null,
             "description": null,
             "url": null,
+            "location": null,
             "published_at": "2024-01-15T10:00:00Z",
             "fetched_at": "2024-01-15T10:05:00Z"
         }"#;
@@ -118,6 +125,7 @@ mod tests {
         assert!(item.source.is_none());
         assert!(item.description.is_none());
         assert!(item.url.is_none());
+        assert!(item.location.is_none());
     }
 
     #[test]
@@ -128,6 +136,7 @@ mod tests {
             source: None,
             description: None,
             url: None,
+            location: None,
             published_at: chrono::Utc::now(),
             fetched_at: chrono::Utc::now(),
         };

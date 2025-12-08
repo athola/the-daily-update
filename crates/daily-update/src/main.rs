@@ -89,6 +89,12 @@ async fn run_app<B: ratatui::backend::Backend>(
         // Handle input with timeout for async updates
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
+                // Handle help overlay (close on any key)
+                if app.help_open {
+                    app.close_help();
+                    continue;
+                }
+
                 // Handle stock browser modal inputs first
                 if app.stock_browser_open {
                     match key.code {
@@ -125,6 +131,7 @@ async fn run_app<B: ratatui::backend::Backend>(
                     KeyCode::Char('r') => app.start_fetch(),
                     KeyCode::Char('w') => app.toggle_weather(),
                     KeyCode::Char('s') => app.open_stock_browser(),
+                    KeyCode::Char('?') => app.toggle_help(),
                     KeyCode::Tab => app.next_panel(),
                     KeyCode::BackTab => app.next_panel(), // Same as Tab for now
 

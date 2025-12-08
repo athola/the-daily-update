@@ -6,6 +6,8 @@ use reqwest::Client;
 use serde::Deserialize;
 use thiserror::Error;
 
+use crate::ApiKey;
+
 const TIINGO_API_BASE: &str = "https://api.tiingo.com/iex";
 
 #[derive(Debug, Error)]
@@ -49,17 +51,22 @@ fn get_stock_name(symbol: &str) -> String {
 
 /// Tiingo API client
 pub struct StocksClient {
-    api_key: String,
+    api_key: ApiKey,
     client: Client,
 }
 
 impl StocksClient {
     /// Create a new Tiingo client
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: ApiKey) -> Self {
         Self {
             api_key,
             client: Client::new(),
         }
+    }
+
+    /// Create a StocksClient from a raw string (for backwards compatibility)
+    pub fn from_string(api_key: String) -> Self {
+        Self::new(ApiKey::from_trusted(api_key))
     }
 
     /// Fetch stock data for multiple symbols
@@ -71,7 +78,7 @@ impl StocksClient {
         let tickers = symbols.join(",");
         let url = format!(
             "{}?tickers={}&token={}",
-            TIINGO_API_BASE, tickers, self.api_key
+            TIINGO_API_BASE, tickers, self.api_key.as_str()
         );
 
         let response = self.client.get(&url).send().await?;

@@ -47,19 +47,19 @@ impl BackgroundFetcher {
             .apis
             .news_api_key
             .as_ref()
-            .map(|key| NewsClient::new(key.clone()));
+            .map(|key| NewsClient::from_string(key.clone()));
 
         let weather_client = config
             .apis
             .weather_api_key
             .as_ref()
-            .map(|key| WeatherClient::new(key.clone()));
+            .map(|key| WeatherClient::from_string(key.clone()));
 
         let stocks_client = config
             .apis
             .tiingo_api_key
             .as_ref()
-            .map(|key| StocksClient::new(key.clone()));
+            .map(|key| StocksClient::from_string(key.clone()));
 
         Self {
             config,
