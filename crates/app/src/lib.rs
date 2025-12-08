@@ -409,7 +409,8 @@ impl App {
 
         for news in &self.news {
             let symbols = extract_symbols(&news.headline);
-            for symbol in symbols {
+            let unique_symbols: std::collections::HashSet<_> = symbols.into_iter().collect();
+            for symbol in unique_symbols {
                 // Skip default SPY - only add explicitly mentioned companies
                 if symbol != "SPY" {
                     *mention_counts.entry(symbol).or_insert(0) += 1;
