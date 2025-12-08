@@ -8,15 +8,15 @@ use api::stocks::StocksClient;
 use api::weather::WeatherClient;
 use config::settings::Config;
 use data::db::Database;
-use data::models::{NewsItem, StockData, WeatherData};
+use data::models::{NewsItem, StockData, WeatherData, WeatherSource};
 
 /// Messages sent from background fetcher to UI
 #[derive(Debug, Clone)]
 pub enum FetchUpdate {
     /// News data has been updated
     NewsUpdated(Vec<NewsItem>),
-    /// Weather data has been updated
-    WeatherUpdated(WeatherData),
+    /// Weather data has been updated with source context
+    WeatherUpdated(WeatherData, WeatherSource),
     /// Stocks data has been updated
     StocksUpdated(Vec<StockData>),
     /// An error occurred during fetch
@@ -109,7 +109,7 @@ impl BackgroundFetcher {
                     if let Ok(db) = db.lock() {
                         let _ = db.upsert_weather(&data);
                     }
-                    let _ = tx.send(FetchUpdate::WeatherUpdated(data)).await;
+                    let _ = tx.send(FetchUpdate::WeatherUpdated(data, WeatherSource::Default)).await;
                 }
                 Err(e) => {
                     let _ = tx
