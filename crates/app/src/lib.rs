@@ -161,6 +161,25 @@ impl App {
         });
     }
 
+    /// Fetch stock data for additional symbols (non-blocking)
+    /// Creates a new channel for receiving stock updates
+    pub fn fetch_additional_stocks(&mut self, symbols: Vec<String>) {
+        if symbols.is_empty() {
+            return;
+        }
+
+        let fetcher = BackgroundFetcher::new(self.config.clone());
+        let db = Arc::clone(&self.db);
+
+        // Create new channel for stock updates
+        let (tx, rx) = mpsc::channel(16);
+        self.fetch_rx = Some(rx);
+
+        tokio::spawn(async move {
+            fetcher.fetch_stocks_only(symbols, db, tx).await;
+        });
+    }
+
     /// Process any pending fetch updates
     pub fn process_fetch_updates(&mut self) {
         let mut should_complete = false;
@@ -198,7 +217,12 @@ impl App {
 
         if news_updated {
             self.process_news_mentions();
-            self.auto_populate_watchlist();
+            let new_symbols = self.auto_populate_watchlist();
+
+            // Fetch data for newly added stocks immediately
+            if !new_symbols.is_empty() {
+                self.fetch_additional_stocks(new_symbols);
+            }
         }
 
         if should_complete {
@@ -400,29 +424,26 @@ impl App {
         Vec::new()
     }
 
-    /// Auto-add frequently mentioned stocks to watchlist
-    /// Only adds stocks that appear in 2+ headlines and aren't already in watchlist
-    pub fn auto_populate_watchlist(&mut self) {
-        // Count mentions per symbol
-        let mut mention_counts: std::collections::HashMap<String, usize> =
-            std::collections::HashMap::new();
+    /// Auto-add mentioned stocks to watchlist
+    /// Adds any stock mentioned in headlines that isn't already in watchlist
+    pub fn auto_populate_watchlist(&mut self) -> Vec<String> {
+        // Collect unique symbols mentioned in news (excluding default SPY)
+        let mut mentioned: std::collections::HashSet<String> = std::collections::HashSet::new();
 
         for news in &self.news {
             let symbols = extract_symbols(&news.headline);
-            let unique_symbols: std::collections::HashSet<_> = symbols.into_iter().collect();
-            for symbol in unique_symbols {
+            for symbol in symbols {
                 // Skip default SPY - only add explicitly mentioned companies
                 if symbol != "SPY" {
-                    *mention_counts.entry(symbol).or_insert(0) += 1;
+                    mentioned.insert(symbol);
                 }
             }
         }
 
-        // Add stocks mentioned 2+ times that aren't in watchlist
-        let to_add: Vec<String> = mention_counts
+        // Add any mentioned stock not already in watchlist
+        let to_add: Vec<String> = mentioned
             .into_iter()
-            .filter(|(symbol, count)| *count >= 2 && !self.watchlist.contains(symbol))
-            .map(|(symbol, _)| symbol)
+            .filter(|symbol| !self.watchlist.contains(symbol))
             .collect();
 
         if !to_add.is_empty() {
@@ -431,8 +452,10 @@ impl App {
                     let _ = db.add_to_watchlist(symbol);
                 }
             }
-            self.watchlist.extend(to_add);
+            self.watchlist.extend(to_add.clone());
         }
+
+        to_add
     }
 }
 
@@ -695,5 +718,33 @@ mod tests {
                 symbols
             );
         };
+    }
+
+    #[test]
+    fn given_single_mention_when_auto_populate_then_adds_to_watchlist() {
+        let mut app = make_test_app();
+
+        // Add single news mentioning a company (should be added with threshold=1)
+        if let Ok(db) = app.db.lock() {
+            let news = create_news_item("Apple announces new iPhone features");
+            let id = db.insert_news(&news).unwrap();
+            app.news.push(NewsItem {
+                id: Some(id),
+                ..news
+            });
+        }
+
+        let initial_watchlist_len = app.watchlist.len();
+        app.auto_populate_watchlist();
+
+        assert!(
+            app.watchlist.contains(&"AAPL".to_string()),
+            "Expected AAPL in watchlist from single mention, got: {:?}",
+            app.watchlist
+        );
+        assert!(
+            app.watchlist.len() > initial_watchlist_len,
+            "Watchlist should have grown"
+        );
     }
 }

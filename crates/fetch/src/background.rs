@@ -180,6 +180,43 @@ impl BackgroundFetcher {
 
         let _ = tx.send(FetchUpdate::Complete).await;
     }
+
+    /// Fetch stocks only for specific symbols (used after auto-populate adds new stocks)
+    pub async fn fetch_stocks_only(
+        &self,
+        symbols: Vec<String>,
+        db: Arc<std::sync::Mutex<Database>>,
+        tx: mpsc::Sender<FetchUpdate>,
+    ) {
+        if symbols.is_empty() {
+            let _ = tx.send(FetchUpdate::Complete).await;
+            return;
+        }
+
+        if let Some(client) = &self.stocks_client {
+            match client.fetch_stocks(&symbols).await {
+                Ok(stocks) => {
+                    // Store in database
+                    if let Ok(db) = db.lock() {
+                        for stock in &stocks {
+                            let _ = db.upsert_stock(stock);
+                        }
+                    }
+                    let _ = tx.send(FetchUpdate::StocksUpdated(stocks)).await;
+                }
+                Err(e) => {
+                    let _ = tx
+                        .send(FetchUpdate::Error(FetchError {
+                            source: "stocks".to_string(),
+                            message: e.to_string(),
+                        }))
+                        .await;
+                }
+            }
+        }
+
+        let _ = tx.send(FetchUpdate::Complete).await;
+    }
 }
 
 /// Check if we appear to be offline
