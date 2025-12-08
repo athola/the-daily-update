@@ -7,7 +7,7 @@ use api::stocks::StocksClient;
 use chrono::NaiveDate;
 use config::settings::Config;
 use data::db::Database;
-use data::models::{AvailableStock, NewsItem, StockData, WeatherData};
+use data::models::{AvailableStock, NewsItem, StockData, WeatherData, WeatherSource};
 use fetch::background::{BackgroundFetcher, FetchUpdate};
 
 /// Application state
@@ -22,6 +22,8 @@ pub struct App {
     pub news: Vec<NewsItem>,
     /// Current weather data
     pub weather: Option<WeatherData>,
+    /// Source of current weather data (default location or news context)
+    pub weather_source: WeatherSource,
     /// Current stock data (from watchlist)
     pub stocks: Vec<StockData>,
     /// User's watchlist symbols
@@ -123,6 +125,7 @@ impl App {
             db,
             news,
             weather,
+            weather_source: WeatherSource::Default,
             stocks,
             watchlist,
             news_selected: 0,
@@ -167,8 +170,9 @@ impl App {
                         self.news = items;
                         self.errors.news = None;
                     }
-                    FetchUpdate::WeatherUpdated(data, _source) => {
+                    FetchUpdate::WeatherUpdated(data, source) => {
                         self.weather = Some(data);
+                        self.weather_source = source;
                         self.errors.weather = None;
                     }
                     FetchUpdate::StocksUpdated(stocks) => {
