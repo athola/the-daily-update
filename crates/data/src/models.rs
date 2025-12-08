@@ -59,6 +59,15 @@ pub struct AvailableStock {
     pub in_watchlist: bool,
 }
 
+/// A mention of a stock in a news headline
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewsStockMention {
+    pub id: Option<i64>,
+    pub news_id: i64,
+    pub symbol: String,
+    pub mentioned_at: DateTime<Utc>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -327,5 +336,38 @@ mod tests {
         assert_eq!(cloned.symbol, stock.symbol);
         assert_eq!(cloned.name, stock.name);
         assert_eq!(cloned.in_watchlist, stock.in_watchlist);
+    }
+
+    // ============================================================
+    // NewsStockMention Tests
+    // ============================================================
+
+    #[test]
+    fn given_news_stock_mention_when_serialized_then_json_is_valid() {
+        let mention = NewsStockMention {
+            id: Some(1),
+            news_id: 42,
+            symbol: "AAPL".to_string(),
+            mentioned_at: chrono::Utc::now(),
+        };
+
+        let json = serde_json::to_string(&mention).expect("Serialization should succeed");
+        assert!(json.contains("AAPL"));
+        assert!(json.contains("42"));
+    }
+
+    #[test]
+    fn given_news_stock_mention_json_when_deserialized_then_struct_is_correct() {
+        let json = r#"{
+        "id": 1,
+        "news_id": 42,
+        "symbol": "GOOGL",
+        "mentioned_at": "2024-01-15T10:00:00Z"
+    }"#;
+
+        let mention: NewsStockMention =
+            serde_json::from_str(json).expect("Deserialization should succeed");
+        assert_eq!(mention.news_id, 42);
+        assert_eq!(mention.symbol, "GOOGL");
     }
 }
