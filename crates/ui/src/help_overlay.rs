@@ -63,6 +63,40 @@ pub fn render_help_overlay(frame: &mut Frame, app: &App, area: Rect) {
         ]));
     }
 
+    // Add date navigation keybindings
+    lines.extend(vec![
+        Line::from(vec![]),
+        Line::from(vec![Span::styled(
+            "Date Navigation",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]),
+        Line::from(vec![]),
+    ]);
+
+    if app.config.general.vim_mode {
+        lines.extend(vec![
+            Line::from(vec![
+                Span::styled("h / l       ", Style::default().fg(Color::Cyan)),
+                Span::raw("Navigate dates (past 7 days)"),
+            ]),
+            Line::from(vec![
+                Span::styled("d           ", Style::default().fg(Color::Cyan)),
+                Span::raw("Jump to today"),
+            ]),
+        ]);
+    } else {
+        lines.extend(vec![
+            Line::from(vec![
+                Span::styled("← / →       ", Style::default().fg(Color::Cyan)),
+                Span::raw("Navigate dates (past 7 days)"),
+            ]),
+            Line::from(vec![
+                Span::styled("d           ", Style::default().fg(Color::Cyan)),
+                Span::raw("Jump to today"),
+            ]),
+        ]);
+    }
+
     // Add action keybindings
     lines.extend(vec![
         Line::from(vec![]),
