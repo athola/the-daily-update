@@ -119,7 +119,11 @@ impl BackgroundFetcher {
                     .as_ref()
                     .and_then(|items| items.first())
                     .and_then(|item| {
-                        extract_location_from_news(&item.headline, item.description.as_deref())
+                        extract_location_from_news(
+                            &item.headline,
+                            item.description.as_deref(),
+                            item.source.as_deref(),
+                        )
                     });
 
                 match news_location {
@@ -234,10 +238,19 @@ mod tests {
 
     /// Helper to create a test NewsItem
     fn create_news_item(headline: &str, description: Option<&str>) -> NewsItem {
+        create_news_item_with_source(headline, description, "Test Source")
+    }
+
+    /// Helper to create a test NewsItem with a specific source
+    fn create_news_item_with_source(
+        headline: &str,
+        description: Option<&str>,
+        source: &str,
+    ) -> NewsItem {
         NewsItem {
             id: None,
             headline: headline.to_string(),
-            source: Some("Test Source".to_string()),
+            source: Some(source.to_string()),
             description: description.map(|s| s.to_string()),
             url: Some("https://example.com".to_string()),
             location: None,
@@ -266,28 +279,41 @@ mod tests {
 
     #[test]
     fn given_news_headline_with_san_francisco_when_extracted_then_returns_san_francisco() {
-        // Test location extraction with news item
+        // Test location extraction with news item (unknown source falls back to headline)
         let item = create_news_item("Breaking: Fire in San Francisco downtown", None);
-        let location = extract_location_from_news(&item.headline, item.description.as_deref());
+        let location = extract_location_from_news(
+            &item.headline,
+            item.description.as_deref(),
+            item.source.as_deref(),
+        );
         assert_eq!(location, Some("San Francisco, CA".to_string()));
     }
 
     #[test]
-    fn given_news_headline_without_city_but_description_with_city_when_extracted_then_uses_description() {
-        // Test fallback to description
+    fn given_news_headline_without_city_but_description_with_city_when_extracted_then_uses_description()
+    {
+        // Test fallback to description (unknown source)
         let item = create_news_item(
             "Major storm approaching",
             Some("Officials in Miami are preparing for severe weather"),
         );
-        let location = extract_location_from_news(&item.headline, item.description.as_deref());
+        let location = extract_location_from_news(
+            &item.headline,
+            item.description.as_deref(),
+            item.source.as_deref(),
+        );
         assert_eq!(location, Some("Miami, FL".to_string()));
     }
 
     #[test]
     fn given_news_without_any_city_when_extracted_then_returns_none() {
-        // Test no location found scenario
+        // Test no location found scenario (unknown source, no city in text)
         let item = create_news_item("Global markets rally on economic news", None);
-        let location = extract_location_from_news(&item.headline, item.description.as_deref());
+        let location = extract_location_from_news(
+            &item.headline,
+            item.description.as_deref(),
+            item.source.as_deref(),
+        );
         assert_eq!(location, None);
     }
 
@@ -295,9 +321,13 @@ mod tests {
     fn given_empty_news_list_when_determining_location_then_returns_none() {
         // Test empty news scenario
         let news_items: Vec<NewsItem> = vec![];
-        let location = news_items
-            .first()
-            .and_then(|item| extract_location_from_news(&item.headline, item.description.as_deref()));
+        let location = news_items.first().and_then(|item| {
+            extract_location_from_news(
+                &item.headline,
+                item.description.as_deref(),
+                item.source.as_deref(),
+            )
+        });
         assert_eq!(location, None);
     }
 
@@ -308,13 +338,20 @@ mod tests {
         let news_items: Vec<NewsItem> = vec![];
 
         let (location, source) = {
-            let news_location = news_items
-                .first()
-                .and_then(|item| extract_location_from_news(&item.headline, item.description.as_deref()));
+            let news_location = news_items.first().and_then(|item| {
+                extract_location_from_news(
+                    &item.headline,
+                    item.description.as_deref(),
+                    item.source.as_deref(),
+                )
+            });
 
             match news_location {
                 Some(loc) => (loc, WeatherSource::NewsContext),
-                None => (config.general.default_location.clone(), WeatherSource::Default),
+                None => (
+                    config.general.default_location.clone(),
+                    WeatherSource::Default,
+                ),
             }
         };
 
@@ -326,16 +363,26 @@ mod tests {
     fn given_news_with_location_when_determining_source_then_uses_news_context() {
         // Test WeatherSource::NewsContext is used when location found in news
         let config = create_test_config("Boston, MA");
-        let news_items = [create_news_item("Seattle tech company announces layoffs", None)];
+        let news_items = [create_news_item(
+            "Seattle tech company announces layoffs",
+            None,
+        )];
 
         let (location, source) = {
-            let news_location = news_items
-                .first()
-                .and_then(|item| extract_location_from_news(&item.headline, item.description.as_deref()));
+            let news_location = news_items.first().and_then(|item| {
+                extract_location_from_news(
+                    &item.headline,
+                    item.description.as_deref(),
+                    item.source.as_deref(),
+                )
+            });
 
             match news_location {
                 Some(loc) => (loc, WeatherSource::NewsContext),
-                None => (config.general.default_location.clone(), WeatherSource::Default),
+                None => (
+                    config.general.default_location.clone(),
+                    WeatherSource::Default,
+                ),
             }
         };
 
@@ -362,10 +409,12 @@ mod tests {
         let loc_from_original = extract_location_from_news(
             &original[0].headline,
             original[0].description.as_deref(),
+            original[0].source.as_deref(),
         );
         let loc_from_cloned = extract_location_from_news(
             &cloned[0].headline,
             cloned[0].description.as_deref(),
+            cloned[0].source.as_deref(),
         );
         assert_eq!(loc_from_original, loc_from_cloned);
     }
@@ -380,9 +429,13 @@ mod tests {
         ];
 
         // Simulate the logic in fetch_all
-        let location = news_items
-            .first()
-            .and_then(|item| extract_location_from_news(&item.headline, item.description.as_deref()));
+        let location = news_items.first().and_then(|item| {
+            extract_location_from_news(
+                &item.headline,
+                item.description.as_deref(),
+                item.source.as_deref(),
+            )
+        });
 
         // Should use Boston from first item, not Seattle or Miami
         assert_eq!(location, Some("Boston, MA".to_string()));
@@ -390,16 +443,67 @@ mod tests {
 
     #[test]
     fn given_news_with_headline_and_description_locations_when_extracted_then_headline_wins() {
-        // Test that headline takes precedence over description
+        // Test that headline takes precedence over description (when source unknown)
         let item = create_news_item(
             "Denver airport delays continue",
             Some("Officials in Phoenix report no issues"),
         );
 
-        let location = extract_location_from_news(&item.headline, item.description.as_deref());
+        let location = extract_location_from_news(
+            &item.headline,
+            item.description.as_deref(),
+            item.source.as_deref(),
+        );
 
         // Should use Denver from headline, not Phoenix from description
         assert_eq!(location, Some("Denver, CO".to_string()));
+    }
+
+    #[test]
+    fn given_known_source_when_extracting_location_then_uses_source_hq() {
+        // Test that known source HQ takes priority over headline city
+        let item = create_news_item_with_source(
+            "San Francisco startup raises $10M",
+            None,
+            "Bloomberg", // Bloomberg HQ is New York
+        );
+
+        let location = extract_location_from_news(
+            &item.headline,
+            item.description.as_deref(),
+            item.source.as_deref(),
+        );
+
+        // Should use New York (Bloomberg HQ), not San Francisco from headline
+        assert_eq!(location, Some("New York, NY".to_string()));
+    }
+
+    #[test]
+    fn given_bbc_source_when_extracting_location_then_uses_london() {
+        // Test international source
+        let item = create_news_item_with_source("Global economy shows recovery", None, "BBC News");
+
+        let location = extract_location_from_news(
+            &item.headline,
+            item.description.as_deref(),
+            item.source.as_deref(),
+        );
+
+        assert_eq!(location, Some("London, UK".to_string()));
+    }
+
+    #[test]
+    fn given_cnn_source_when_extracting_location_then_uses_atlanta() {
+        // Test CNN (Atlanta HQ)
+        let item = create_news_item_with_source("Breaking news update", None, "CNN");
+
+        let location = extract_location_from_news(
+            &item.headline,
+            item.description.as_deref(),
+            item.source.as_deref(),
+        );
+
+        assert_eq!(location, Some("Atlanta, GA".to_string()));
     }
 
     #[test]

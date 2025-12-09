@@ -160,9 +160,12 @@ impl NewsClient {
                 }
             };
 
-            // Extract location from headline and description
-            let location =
-                extract_location_from_news(&article.title, article.description.as_deref());
+            // Extract location: prioritize source HQ, then headline, then description
+            let location = extract_location_from_news(
+                &article.title,
+                article.description.as_deref(),
+                Some(&article.source.name),
+            );
 
             news_items.push(NewsItem {
                 id: None, // Will be set when saved to database

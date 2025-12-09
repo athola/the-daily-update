@@ -3,7 +3,7 @@
 # Rust TUI application for news, weather, and stock aggregation
 # Uses Cargo workspace for modular compilation
 
-.PHONY: help lint test test-unit test-integration build clean check fmt all run demo demo-info
+.PHONY: help lint test test-unit test-integration build clean check fmt all run info
 
 # Default target
 .DEFAULT_GOAL := help
@@ -64,10 +64,7 @@ clean: ## Clean build artifacts
 
 ##@ Demo & Features
 
-demo: build ## Run the application (alias for run)
-	cargo run --package daily-update
-
-demo-info: ## Show feature keybindings for demos
+info: ## Show feature keybindings for demos
 	@echo "$(CYAN)The Daily Update - Feature Demo$(RESET)"
 	@echo ""
 	@echo "$(YELLOW)Date Navigation:$(RESET)"
