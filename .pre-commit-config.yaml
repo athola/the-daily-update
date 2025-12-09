@@ -1,0 +1,63 @@
+# Pre-commit hooks for The Daily Update
+# ======================================
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+default_stages: [pre-commit]
+
+repos:
+  # Rust formatting check
+  - repo: local
+    hooks:
+      - id: rustfmt
+        name: rustfmt
+        description: Format Rust code with rustfmt
+        entry: cargo fmt --all -- --check
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+  # Clippy linting
+  - repo: local
+    hooks:
+      - id: clippy
+        name: clippy
+        description: Lint Rust code with clippy
+        entry: cargo clippy --workspace --all-targets --all-features -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+  # Unit tests
+  - repo: local
+    hooks:
+      - id: test-unit
+        name: unit-tests
+        description: Run unit tests
+        entry: cargo test --workspace --lib
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+  # Integration tests
+  - repo: local
+    hooks:
+      - id: test-integration
+        name: integration-tests
+        description: Run integration tests
+        entry: cargo test --package daily-update --test '*'
+        language: system
+        types: [rust]
+        pass_filenames: false
+        stages: [pre-commit]
+
+  # Makefile syntax validation
+  - repo: local
+    hooks:
+      - id: validate-makefile
+        name: validate-makefile
+        description: Validate Makefile syntax
+        entry: make -n help
+        language: system
+        files: ^Makefile$
+        pass_filenames: false

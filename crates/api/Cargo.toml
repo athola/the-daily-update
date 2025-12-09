@@ -1,0 +1,16 @@
+[package]
+name = "api"
+description = "External API clients for news, weather, and stocks"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+chrono = { workspace = true }
+data = { workspace = true }
+once_cell = "1.21.3"
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }

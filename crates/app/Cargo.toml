@@ -1,0 +1,17 @@
+[package]
+name = "app"
+description = "Application state and main event loop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+data = { workspace = true }
+config = { workspace = true }
+api = { workspace = true }
+fetch = { workspace = true }
+tokio = { workspace = true }
+crossterm = { workspace = true }
+ratatui = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }

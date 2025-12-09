@@ -1,0 +1,26 @@
+# Rust build artifacts
+/target/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Config (contains API keys)
+config.toml
+.env
+.env.*
+
+# Design documents (LLM-generated plans)
+docs/plans/

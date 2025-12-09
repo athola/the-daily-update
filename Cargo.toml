@@ -1,0 +1,53 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/daily-update",
+    "crates/app",
+    "crates/ui",
+    "crates/data",
+    "crates/api",
+    "crates/config",
+    "crates/fetch",
+]
+
+# Shared dependencies across workspace
+[workspace.dependencies]
+# TUI
+ratatui = "0.29"
+crossterm = "0.28"
+
+# Async runtime (minimal features needed: runtime, macros for #[tokio::main], sync for mpsc)
+tokio = { version = "1.41", features = ["rt-multi-thread", "macros", "sync"] }
+
+# Database
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Utilities
+chrono = { version = "0.4", features = ["serde"] }
+directories = "5.0"
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Dev dependencies
+tempfile = "3.14"
+
+# Internal crates
+app = { path = "crates/app" }
+ui = { path = "crates/ui" }
+data = { path = "crates/data" }
+api = { path = "crates/api" }
+config = { path = "crates/config" }
+fetch = { path = "crates/fetch" }
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"

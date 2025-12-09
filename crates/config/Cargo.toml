@@ -1,0 +1,13 @@
+[package]
+name = "config"
+description = "Configuration management and first-run setup"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+toml = { workspace = true }
+directories = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
