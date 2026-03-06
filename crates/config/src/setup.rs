@@ -12,22 +12,24 @@ pub fn needs_setup(config: &Config) -> bool {
 
 /// Display security guidance
 pub fn display_security_guidance() {
-    println!();
-    println!("╭─────────────────── API Key Security ───────────────────╮");
-    println!("│                                                        │");
-    println!("│  Your API keys grant access to paid services.          │");
-    println!("│  Keep them secure:                                     │");
-    println!("│                                                        │");
-    println!("│  ✓ Use environment variables (recommended)             │");
-    println!("│    export NEWS_API_KEY=\"your-key\"                      │");
-    println!("│                                                        │");
-    println!("│  ✓ Or use a .env file (add to .gitignore)              │");
-    println!("│                                                        │");
-    println!("│  ✗ Avoid committing keys to version control            │");
-    println!("│  ✗ Don't share config files containing keys            │");
-    println!("│                                                        │");
-    println!("╰────────────────────────────────────────────────────────╯");
-    println!();
+    println!(
+        r#"
+╭─────────────────── API Key Security ───────────────────╮
+│                                                        │
+│  Your API keys grant access to paid services.          │
+│  Keep them secure:                                     │
+│                                                        │
+│  ✓ Use environment variables (recommended)             │
+│    export NEWS_API_KEY="your-key"                      │
+│                                                        │
+│  ✓ Or use a .env file (add to .gitignore)              │
+│                                                        │
+│  ✗ Avoid committing keys to version control            │
+│  ✗ Don't share config files containing keys            │
+│                                                        │
+╰────────────────────────────────────────────────────────╯
+"#
+    );
 }
 
 /// Run interactive setup wizard
@@ -79,6 +81,32 @@ pub fn run_setup_wizard(config: &mut Config) -> Result<()> {
         // Clean up common input variations
         let cleaned = clean_location_input(input);
         config.general.default_location = cleaned;
+    }
+
+    // Watchlist configuration
+    println!();
+    println!("Configure your default stock watchlist.");
+    println!("  Available: SPY, QQQ, DIA, AAPL, GOOGL, MSFT, AMZN, TSLA, META, NVDA");
+    println!("  Enter comma-separated symbols (e.g., SPY,AAPL,MSFT)");
+    print!(
+        "  Watchlist [{}]: ",
+        config.general.default_watchlist.join(",")
+    );
+    io::stdout().flush()?;
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    let input = input.trim();
+
+    if !input.is_empty() {
+        let symbols: Vec<String> = input
+            .split(',')
+            .map(|s| s.trim().to_uppercase())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if !symbols.is_empty() {
+            config.general.default_watchlist = symbols;
+        }
     }
 
     // Ask about vim mode
@@ -145,7 +173,7 @@ fn clean_location_input(input: &str) -> String {
 
     // If there's no comma but there's a potential state abbreviation at the end
     if !input.contains(',') && parts.len() >= 2 {
-        let last = parts.last().unwrap();
+        let last = &parts[parts.len() - 1];
         // Check if last part looks like a state/country code (2-3 uppercase letters)
         if last.len() <= 3 && last.chars().all(|c| c.is_alphabetic()) {
             // Insert comma before the state code
@@ -163,6 +191,6 @@ fn clean_location_input(input: &str) -> String {
 pub fn display_banner() {
     println!();
     println!("╔═════════════════════════════════════════╗");
-    println!("║       The Daily Update v0.1.0           ║");
+    println!("║       The Daily Update v{}           ║", env!("CARGO_PKG_VERSION"));
     println!("╚═════════════════════════════════════════╝");
 }

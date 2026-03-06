@@ -20,7 +20,6 @@ ratatui = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
-data = { workspace = true }
+data = { path = "../data", features = ["test-helpers"] }
 config = { workspace = true }
 chrono = { workspace = true }
-tempfile = { workspace = true }

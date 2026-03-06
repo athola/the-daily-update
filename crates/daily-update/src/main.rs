@@ -14,6 +14,7 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use app::App;
 use config::settings::Config;
 use config::setup::{display_banner, needs_setup, run_setup_wizard};
+use data::cache::prune_old_data;
 use data::db::Database;
 
 #[tokio::main]
@@ -39,6 +40,11 @@ async fn main() -> Result<()> {
     // Initialize database
     let db_path = Config::database_path()?;
     let db = Database::open(&db_path)?;
+
+    // Prune stale data on startup
+    if let Err(e) = prune_old_data(&db) {
+        eprintln!("Warning: failed to prune old data: {}", e);
+    }
 
     // Create application state
     let mut app = App::new(config, db);
@@ -109,14 +115,8 @@ async fn run_app<B: ratatui::backend::Backend>(
                         KeyCode::Char('k') if app.config.general.vim_mode => {
                             app.stock_browser_prev()
                         }
-                        KeyCode::Backspace => {
-                            app.stock_browser.filter.pop();
-                            app.stock_browser.selected = 0;
-                        }
-                        KeyCode::Char(c) if c.is_alphanumeric() => {
-                            app.stock_browser.filter.push(c);
-                            app.stock_browser.selected = 0;
-                        }
+                        KeyCode::Backspace => app.stock_browser_backspace(),
+                        KeyCode::Char(c) if c.is_alphanumeric() => app.stock_browser_type(c),
                         _ => {}
                     }
                     continue;
@@ -153,7 +153,7 @@ async fn run_app<B: ratatui::backend::Backend>(
             }
         }
 
-        if !app.running {
+        if !app.is_running() {
             break;
         }
     }

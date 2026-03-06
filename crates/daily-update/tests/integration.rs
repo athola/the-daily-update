@@ -28,7 +28,7 @@ fn test_config() -> Config {
 fn integration_smoke_test() {
     // Basic integration test to verify test infrastructure works
     let version = env!("CARGO_PKG_VERSION");
-    assert_eq!(version, "0.1.0");
+    assert_eq!(version, "0.1.1");
 }
 
 #[test]
@@ -40,7 +40,7 @@ fn given_all_crates_imported_then_they_compile_together() {
     let cache_config = CacheConfig::default();
 
     // Verify each component initializes correctly
-    assert!(app.running, "App should be running after creation");
+    assert!(app.is_running(), "App should be running after creation");
     assert!(
         cache_config.news_max_age.num_hours() >= 1,
         "Cache config should have valid thresholds"
@@ -576,7 +576,7 @@ fn given_full_app_session_when_simulating_user_workflow_then_all_operations_succ
 
     // 4. User quits
     app.quit();
-    assert!(!app.running);
+    assert!(!app.is_running());
 }
 
 // ============================================================

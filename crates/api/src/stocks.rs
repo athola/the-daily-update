@@ -1,5 +1,8 @@
 //! Tiingo API client for stock data
 
+use std::collections::HashMap;
+use std::sync::Mutex;
+
 use chrono::Utc;
 use data::models::StockData;
 use reqwest::Client;
@@ -8,7 +11,8 @@ use thiserror::Error;
 
 use crate::ApiKey;
 
-const TIINGO_API_BASE: &str = "https://api.tiingo.com/iex";
+const TIINGO_IEX_BASE: &str = "https://api.tiingo.com/iex";
+const TIINGO_META_BASE: &str = "https://api.tiingo.com/tiingo/daily";
 
 #[derive(Debug, Error)]
 pub enum StocksApiError {
@@ -32,100 +36,83 @@ struct TiingoResponse {
     prev_close: Option<f64>,
 }
 
-/// Stock name mappings for common symbols
-fn get_stock_name(symbol: &str) -> String {
-    match symbol.to_uppercase().as_str() {
-        "SPY" => "S&P 500 ETF".to_string(),
-        "QQQ" => "NASDAQ ETF".to_string(),
-        "DIA" => "Dow Jones ETF".to_string(),
-        "AAPL" => "Apple Inc.".to_string(),
-        "GOOGL" | "GOOG" => "Alphabet Inc.".to_string(),
-        "MSFT" => "Microsoft Corp.".to_string(),
-        "AMZN" => "Amazon.com".to_string(),
-        "TSLA" => "Tesla Inc.".to_string(),
-        "META" => "Meta Platforms".to_string(),
-        "NVDA" => "NVIDIA Corp.".to_string(),
-        _ => symbol.to_uppercase(),
-    }
+/// Tiingo daily meta response (for company name)
+#[derive(Debug, Deserialize)]
+struct TiingoMetaResponse {
+    name: Option<String>,
 }
 
 /// Tiingo API client
 pub struct StocksClient {
     api_key: ApiKey,
     client: Client,
+    name_cache: Mutex<HashMap<String, String>>,
 }
 
 impl StocksClient {
     /// Create a new Tiingo client
-    pub fn new(api_key: ApiKey) -> Self {
-        Self {
+    pub fn new(api_key: ApiKey) -> Result<Self, reqwest::Error> {
+        Ok(Self {
             api_key,
-            client: Client::new(),
+            client: Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()?,
+            name_cache: Mutex::new(HashMap::new()),
+        })
+    }
+
+    /// Look up the company name for a ticker, checking cache first
+    fn get_cached_name(&self, symbol: &str) -> Option<String> {
+        self.name_cache
+            .lock()
+            .ok()
+            .and_then(|cache| cache.get(symbol).cloned())
+    }
+
+    /// Store a company name in the cache
+    fn cache_name(&self, symbol: &str, name: &str) {
+        if let Ok(mut cache) = self.name_cache.lock() {
+            cache.insert(symbol.to_string(), name.to_string());
         }
     }
 
-    /// Create a StocksClient from a raw string (for backwards compatibility)
-    pub fn from_string(api_key: String) -> Self {
-        Self::new(ApiKey::from_trusted(api_key))
-    }
+    /// Fetch company name from Tiingo meta endpoint for a single ticker
+    async fn fetch_company_name(&self, symbol: &str) -> Result<Option<String>, StocksApiError> {
+        let url = format!("{}/{}", TIINGO_META_BASE, symbol.to_lowercase());
 
-    /// Fetch stock data for multiple symbols
-    pub async fn fetch_stocks(&self, symbols: &[String]) -> Result<Vec<StockData>, StocksApiError> {
-        if symbols.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let tickers = symbols.join(",");
-        let url = format!(
-            "{}?tickers={}&token={}",
-            TIINGO_API_BASE,
-            tickers,
-            self.api_key.as_str()
-        );
-
-        let response = self.client.get(&url).send().await?;
+        let response = self
+            .client
+            .get(&url)
+            .header("Authorization", format!("Token {}", self.api_key.as_str()))
+            .send()
+            .await?;
 
         if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            return Err(StocksApiError::ApiError(format!(
-                "Tiingo error: {} - {}",
-                status, body
-            )));
+            return Ok(None);
         }
 
-        let body: Vec<TiingoResponse> = response
+        let meta: TiingoMetaResponse = response
             .json()
             .await
             .map_err(|e| StocksApiError::ParseError(e.to_string()))?;
 
-        let now = Utc::now();
-        let stocks: Vec<StockData> = body
-            .into_iter()
-            .map(|item| {
-                let change_percent = match (item.last_price, item.prev_close) {
-                    (Some(last), Some(prev)) if prev > 0.0 => Some(((last - prev) / prev) * 100.0),
-                    _ => None,
-                };
-
-                StockData {
-                    id: None,
-                    symbol: item.ticker.to_uppercase(),
-                    name: Some(get_stock_name(&item.ticker)),
-                    price: item.last_price,
-                    change_percent,
-                    fetched_at: now,
-                }
-            })
-            .collect();
-
-        Ok(stocks)
+        Ok(meta.name)
     }
 
-    /// Fetch data for a single stock
-    pub async fn fetch_stock(&self, symbol: &str) -> Result<Option<StockData>, StocksApiError> {
-        let stocks = self.fetch_stocks(&[symbol.to_string()]).await?;
-        Ok(stocks.into_iter().next())
+    /// Resolve the company name for a symbol: cache -> API -> fallback to symbol
+    async fn resolve_name(&self, symbol: &str) -> String {
+        if let Some(name) = self.get_cached_name(symbol) {
+            return name;
+        }
+
+        if let Ok(Some(name)) = self.fetch_company_name(symbol).await {
+            if !name.is_empty() {
+                self.cache_name(symbol, &name);
+                return name;
+            }
+        }
+
+        symbol.to_uppercase()
     }
 
     /// Get default watchlist symbols
@@ -150,15 +137,115 @@ impl StocksClient {
     }
 }
 
+impl std::str::FromStr for StocksClient {
+    type Err = Box<dyn std::error::Error + Send + Sync>;
+
+    fn from_str(api_key: &str) -> Result<Self, Self::Err> {
+        let key: ApiKey = api_key.parse()?;
+        Ok(Self::new(key)?)
+    }
+}
+
+impl crate::StocksProvider for StocksClient {
+    /// Fetch stock data for multiple symbols
+    async fn fetch_stocks(&self, symbols: &[String]) -> Result<Vec<StockData>, StocksApiError> {
+        if symbols.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let tickers = symbols.join(",");
+        let url = format!("{}?tickers={}", TIINGO_IEX_BASE, tickers);
+
+        let response = self
+            .client
+            .get(&url)
+            .header("Authorization", format!("Token {}", self.api_key.as_str()))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response
+                .text()
+                .await
+                .unwrap_or_else(|e| format!("<body unreadable: {}>", e));
+            return Err(StocksApiError::ApiError(format!(
+                "Tiingo error: {} - {}",
+                status, body
+            )));
+        }
+
+        let body: Vec<TiingoResponse> = response
+            .json()
+            .await
+            .map_err(|e| StocksApiError::ParseError(e.to_string()))?;
+
+        let now = Utc::now();
+
+        // Resolve all company names concurrently to avoid sequential N+1 API calls
+        let symbols: Vec<String> = body.iter().map(|item| item.ticker.to_uppercase()).collect();
+        let name_futures: Vec<_> = symbols.iter().map(|s| self.resolve_name(s)).collect();
+        let names = futures::future::join_all(name_futures).await;
+
+        let stocks = body
+            .into_iter()
+            .zip(names)
+            .map(|(item, name)| {
+                let symbol = item.ticker.to_uppercase();
+                let change_percent = match (item.last_price, item.prev_close) {
+                    (Some(last), Some(prev)) if prev > 0.0 => {
+                        Some(((last - prev) / prev) * 100.0)
+                    }
+                    _ => None,
+                };
+                StockData {
+                    id: None,
+                    symbol,
+                    name: Some(name),
+                    price: item.last_price,
+                    change_percent,
+                    fetched_at: now,
+                }
+            })
+            .collect();
+
+        Ok(stocks)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn make_test_client() -> StocksClient {
+        "test_key".parse::<StocksClient>().unwrap()
+    }
+
     #[test]
-    fn test_stock_name_mapping() {
-        assert_eq!(get_stock_name("SPY"), "S&P 500 ETF");
-        assert_eq!(get_stock_name("aapl"), "Apple Inc.");
-        assert_eq!(get_stock_name("UNKNOWN"), "UNKNOWN");
+    fn test_name_cache_stores_and_retrieves() {
+        let client = make_test_client();
+        client.cache_name("TEST_SYM", "Test Company");
+        assert_eq!(
+            client.get_cached_name("TEST_SYM"),
+            Some("Test Company".to_string())
+        );
+    }
+
+    #[test]
+    fn test_name_cache_returns_none_for_unknown() {
+        let client = make_test_client();
+        assert!(client.get_cached_name("NONEXISTENT_XYZ_999").is_none());
+    }
+
+    #[test]
+    fn test_name_cache_overwrites_existing() {
+        let client = make_test_client();
+        client.cache_name("OVERWRITE_SYM", "Old Name");
+        client.cache_name("OVERWRITE_SYM", "New Name");
+        assert_eq!(
+            client.get_cached_name("OVERWRITE_SYM"),
+            Some("New Name".to_string())
+        );
     }
 
     #[test]
@@ -166,5 +253,14 @@ mod tests {
         let watchlist = StocksClient::default_watchlist();
         assert!(watchlist.contains(&"SPY".to_string()));
         assert_eq!(watchlist.len(), 3);
+    }
+
+    #[test]
+    fn test_available_stocks_contains_major_etfs() {
+        let stocks = StocksClient::available_stocks();
+        let symbols: Vec<&str> = stocks.iter().map(|(s, _)| s.as_str()).collect();
+        assert!(symbols.contains(&"SPY"));
+        assert!(symbols.contains(&"QQQ"));
+        assert!(symbols.contains(&"DIA"));
     }
 }

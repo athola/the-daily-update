@@ -3,11 +3,11 @@
 //! Provides a static mapping of well-known company names to their stock symbols.
 //! Uses case-insensitive matching with word boundary detection.
 
-use once_cell::sync::Lazy;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
 
 /// Static mapping of company names/keywords to stock symbols
-static COMPANY_TICKERS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
+static COMPANY_TICKERS: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     let mut m = HashMap::new();
 
     // Major tech companies
@@ -78,7 +78,7 @@ static COMPANY_TICKERS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(||
 });
 
 /// Default symbol when no companies are detected
-pub const DEFAULT_SYMBOL: &str = "SPY";
+pub(crate) const DEFAULT_SYMBOL: &str = "SPY";
 
 /// Extract stock symbols from a headline
 ///
@@ -86,16 +86,12 @@ pub const DEFAULT_SYMBOL: &str = "SPY";
 /// Returns vec!["SPY"] if no companies are detected.
 pub fn extract_symbols(headline: &str) -> Vec<String> {
     let headline_lower = headline.to_lowercase();
+    let mut seen = HashSet::new();
     let mut symbols: Vec<String> = Vec::new();
 
     for (keyword, symbol) in COMPANY_TICKERS.iter() {
-        // Check for word boundary match to avoid partial matches
-        // e.g., "application" shouldn't match "apple"
-        if contains_word(&headline_lower, keyword) {
-            let sym = symbol.to_string();
-            if !symbols.contains(&sym) {
-                symbols.push(sym);
-            }
+        if contains_word(&headline_lower, keyword) && seen.insert(*symbol) {
+            symbols.push(symbol.to_string());
         }
     }
 
@@ -107,34 +103,36 @@ pub fn extract_symbols(headline: &str) -> Vec<String> {
 }
 
 /// Check if text contains a word (with word boundaries)
+/// Iterates all occurrences to avoid missing valid matches after partial ones.
 fn contains_word(text: &str, word: &str) -> bool {
-    // Simple word boundary check using character inspection
-    if let Some(byte_pos) = text.find(word) {
-        // Convert byte position to character index for proper Unicode handling
-        let char_pos = text[..byte_pos].chars().count();
+    let mut start = 0;
+    while let Some(rel_pos) = text[start..].find(word) {
+        let byte_pos = start + rel_pos;
 
         // Check character before the match
-        let before_ok = char_pos == 0
-            || !text
+        let before_ok = byte_pos == 0
+            || !text[..byte_pos]
                 .chars()
-                .nth(char_pos - 1)
+                .next_back()
                 .unwrap_or(' ')
                 .is_alphanumeric();
 
         // Check character after the match
-        let word_char_len = word.chars().count();
-        let after_char_pos = char_pos + word_char_len;
-        let after_ok = after_char_pos >= text.chars().count()
-            || !text
+        let after_byte = byte_pos + word.len();
+        let after_ok = after_byte >= text.len()
+            || !text[after_byte..]
                 .chars()
-                .nth(after_char_pos)
+                .next()
                 .unwrap_or(' ')
                 .is_alphanumeric();
 
-        before_ok && after_ok
-    } else {
-        false
+        if before_ok && after_ok {
+            return true;
+        }
+
+        start = byte_pos + word.len();
     }
+    false
 }
 
 #[cfg(test)]
@@ -189,5 +187,16 @@ mod tests {
     fn given_headline_with_unicode_when_extracted_then_matches() {
         let symbols = extract_symbols("café Apple reports earnings");
         assert!(symbols.contains(&"AAPL".to_string()));
+    }
+
+    #[test]
+    fn given_partial_then_valid_occurrence_when_checked_then_matches() {
+        // "inapple" contains "apple" at non-word-boundary, but standalone "apple" should match
+        assert!(contains_word("inapple apple earnings", "apple"));
+    }
+
+    #[test]
+    fn given_only_partial_match_when_checked_then_no_match() {
+        assert!(!contains_word("snapple tastes great", "apple"));
     }
 }

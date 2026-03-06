@@ -17,6 +17,7 @@ impl Database {
     pub fn open(path: &Path) -> Result<Self> {
         let conn = Connection::open(path)
             .with_context(|| format!("Failed to open database at {:?}", path))?;
+        conn.execute_batch("PRAGMA foreign_keys = ON")?;
 
         let db = Self { conn };
         db.initialize_schema()?;
@@ -26,6 +27,7 @@ impl Database {
     /// Create an in-memory database (for testing)
     pub fn in_memory() -> Result<Self> {
         let conn = Connection::open_in_memory()?;
+        conn.execute_batch("PRAGMA foreign_keys = ON")?;
         let db = Self { conn };
         db.initialize_schema()?;
         Ok(db)
@@ -144,15 +146,45 @@ impl Database {
         Ok(())
     }
 
+    /// Atomically replace all news items (clear + insert in a transaction)
+    pub fn replace_news(&self, items: &[NewsItem]) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute("DELETE FROM news", [])?;
+        for item in items {
+            tx.execute(
+                "INSERT INTO news (headline, source, description, url, location, published_at, fetched_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    item.headline,
+                    item.source,
+                    item.description,
+                    item.url,
+                    item.location,
+                    item.published_at.to_rfc3339(),
+                    item.fetched_at.to_rfc3339(),
+                ],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Delete news older than the specified number of days
+    pub fn prune_news_older_than_days(&self, days: u32) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM news WHERE published_at < strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now', ?1)",
+            [format!("-{} days", days)],
+        )?;
+        Ok(())
+    }
+
     // === Weather Operations ===
 
     /// Insert or update weather for a location
     pub fn upsert_weather(&self, data: &WeatherData) -> Result<i64> {
-        // Delete old weather for this location
-        self.conn
-            .execute("DELETE FROM weather WHERE location = ?1", [&data.location])?;
-
-        self.conn.execute(
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute("DELETE FROM weather WHERE location = ?1", [&data.location])?;
+        tx.execute(
             "INSERT INTO weather (location, temperature, condition, humidity, wind_speed,
                                   alert_title, alert_description, alert_severity, fetched_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
@@ -168,7 +200,9 @@ impl Database {
                 data.fetched_at.to_rfc3339(),
             ],
         )?;
-        Ok(self.conn.last_insert_rowid())
+        let id = tx.last_insert_rowid();
+        tx.commit()?;
+        Ok(id)
     }
 
     /// Get weather for a location
@@ -202,10 +236,9 @@ impl Database {
 
     /// Insert or update a stock
     pub fn upsert_stock(&self, data: &StockData) -> Result<i64> {
-        self.conn
-            .execute("DELETE FROM stocks WHERE symbol = ?1", [&data.symbol])?;
-
-        self.conn.execute(
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute("DELETE FROM stocks WHERE symbol = ?1", [&data.symbol])?;
+        tx.execute(
             "INSERT INTO stocks (symbol, name, price, change_percent, fetched_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
@@ -216,7 +249,9 @@ impl Database {
                 data.fetched_at.to_rfc3339(),
             ],
         )?;
-        Ok(self.conn.last_insert_rowid())
+        let id = tx.last_insert_rowid();
+        tx.commit()?;
+        Ok(id)
     }
 
     /// Get stock by symbol
@@ -382,20 +417,23 @@ impl Database {
 
 /// Parse RFC3339 datetime string
 ///
-/// Falls back to current time if parsing fails. This is intentional for graceful degradation
-/// when reading potentially corrupted database records.
+/// Falls back to UNIX epoch if parsing fails, ensuring corrupted records are treated
+/// as stale and will be refreshed on the next fetch cycle.
 fn parse_datetime(s: String) -> DateTime<Utc> {
     DateTime::parse_from_rfc3339(&s)
         .map(|dt| dt.with_timezone(&Utc))
-        .unwrap_or_else(|_| {
-            // Fallback to current time for corrupted timestamps
-            Utc::now()
+        .unwrap_or_else(|e| {
+            eprintln!("Warning: corrupted timestamp '{}': {} - using epoch", s, e);
+            DateTime::UNIX_EPOCH
         })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_helpers::{
+        create_test_news_item, create_test_stock_data, create_test_weather_data,
+    };
     use chrono::Duration;
 
     // ============================================================
@@ -1038,48 +1076,5 @@ mod tests {
         assert_eq!(symbols.len(), 2);
         assert!(symbols.contains(&"AAPL".to_string()));
         assert!(symbols.contains(&"GOOGL".to_string()));
-    }
-
-    // ============================================================
-    // Helper Functions
-    // ============================================================
-
-    fn create_test_news_item(headline: &str) -> NewsItem {
-        NewsItem {
-            id: None,
-            headline: headline.to_string(),
-            source: Some("Test Source".to_string()),
-            description: Some("Test description".to_string()),
-            url: Some("https://example.com".to_string()),
-            location: None,
-            published_at: Utc::now(),
-            fetched_at: Utc::now(),
-        }
-    }
-
-    fn create_test_weather_data(location: &str) -> WeatherData {
-        WeatherData {
-            id: None,
-            location: location.to_string(),
-            temperature: Some(72.5),
-            condition: Some("Sunny".to_string()),
-            humidity: Some(50),
-            wind_speed: Some(10.0),
-            alert_title: None,
-            alert_description: None,
-            alert_severity: None,
-            fetched_at: Utc::now(),
-        }
-    }
-
-    fn create_test_stock_data(symbol: &str, name: &str) -> StockData {
-        StockData {
-            id: None,
-            symbol: symbol.to_string(),
-            name: Some(name.to_string()),
-            price: Some(150.0),
-            change_percent: Some(1.5),
-            fetched_at: Utc::now(),
-        }
     }
 }

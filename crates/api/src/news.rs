@@ -10,7 +10,7 @@ use crate::location::extract_location_from_news;
 use crate::ApiKey;
 
 const NEWS_API_BASE_URL: &str = "https://newsapi.org/v2";
-const USER_AGENT: &str = "TheDailyUpdate/0.1.0 (https://github.com/athola/the-daily-update)";
+const USER_AGENT: &str = concat!("TheDailyUpdate/", env!("CARGO_PKG_VERSION"), " (https://github.com/athola/the-daily-update)");
 
 #[derive(Debug, Error)]
 pub enum NewsApiError {
@@ -65,35 +65,26 @@ pub struct NewsClient {
 
 impl NewsClient {
     /// Create a new NewsAPI client with the provided API key
-    pub fn new(api_key: ApiKey) -> Self {
-        Self {
+    pub fn new(api_key: ApiKey) -> Result<Self, reqwest::Error> {
+        Ok(Self {
             api_key,
-            client: Client::new(),
-        }
+            client: Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()?,
+        })
     }
+}
 
-    /// Create a NewsClient from a raw string (for backwards compatibility)
-    pub fn from_string(api_key: String) -> Self {
-        Self::new(ApiKey::from_trusted(api_key))
+impl std::str::FromStr for NewsClient {
+    type Err = Box<dyn std::error::Error + Send + Sync>;
+
+    fn from_str(api_key: &str) -> Result<Self, Self::Err> {
+        let key: ApiKey = api_key.parse()?;
+        Ok(Self::new(key)?)
     }
+}
 
-    /// Fetch top headlines from NewsAPI
-    ///
-    /// # Arguments
-    /// * `country` - Optional country code (e.g., "us", "gb")
-    /// * `category` - Optional category (e.g., "business", "technology")
-    /// * `page_size` - Optional number of results to return (max 100)
-    /// * `from_date` - Optional date to filter articles from (inclusive)
-    pub async fn fetch_top_headlines(
-        &self,
-        country: Option<&str>,
-        category: Option<&str>,
-        page_size: Option<u32>,
-    ) -> Result<Vec<NewsItem>, NewsApiError> {
-        self.fetch_top_headlines_with_date(country, category, page_size, None)
-            .await
-    }
-
+impl crate::NewsProvider for NewsClient {
     /// Fetch top headlines with optional date filtering
     ///
     /// # Arguments
@@ -101,7 +92,7 @@ impl NewsClient {
     /// * `category` - Optional category (e.g., "business", "technology")
     /// * `page_size` - Optional number of results to return (max 100)
     /// * `from_date` - Optional date to filter articles from (inclusive)
-    pub async fn fetch_top_headlines_with_date(
+    async fn fetch_top_headlines_with_date(
         &self,
         country: Option<&str>,
         category: Option<&str>,
@@ -131,6 +122,16 @@ impl NewsClient {
         }
 
         let response = request.send().await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response
+                .text()
+                .await
+                .unwrap_or_else(|e| format!("<body unreadable: {}>", e));
+            return Err(NewsApiError::ApiError(format!("HTTP {}: {}", status, body)));
+        }
+
         let api_response: NewsApiResponse = response.json().await?;
 
         // Check if the API returned an error
@@ -171,7 +172,7 @@ impl NewsClient {
                 id: None, // Will be set when saved to database
                 headline: article.title,
                 source: Some(article.source.name),
-                description: article.description.clone(),
+                description: article.description,
                 url: Some(article.url),
                 location,
                 published_at,
@@ -189,14 +190,14 @@ mod tests {
 
     #[test]
     fn test_news_client_creation() {
-        let client = NewsClient::from_string("test_api_key".to_string());
+        let client: NewsClient = "test_api_key".parse().unwrap();
         assert_eq!(client.api_key.as_str(), "test_api_key");
     }
 
     #[test]
     fn test_news_client_with_api_key() {
         let api_key = ApiKey::from_trusted("my-news-key".to_string());
-        let client = NewsClient::new(api_key);
+        let client = NewsClient::new(api_key).unwrap();
         assert_eq!(client.api_key.as_str(), "my-news-key");
     }
 

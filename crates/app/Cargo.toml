@@ -11,7 +11,8 @@ config = { workspace = true }
 api = { workspace = true }
 fetch = { workspace = true }
 tokio = { workspace = true }
-crossterm = { workspace = true }
-ratatui = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
+
+[dev-dependencies]
+data = { path = "../data", features = ["test-helpers"] }

@@ -4,17 +4,23 @@
 [![Rust](https://img.shields.io/badge/Rust-1.70%2B-orange?logo=rust)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-A terminal-based daily news aggregator that displays news headlines alongside weather and stock market data. Built with Rust for performance and reliability.
+A terminal-based daily news aggregator that displays news headlines
+alongside weather and stock market data. Built with Rust using a
+Cargo workspace of 7 crates for modular compilation.
 
 ## Features
 
 - **Instant startup** with cached data from previous sessions
 - **Background refresh** fetches fresh data asynchronously on startup
+- **Date navigation** browse news from the past 7 days
 - **News headlines** from NewsAPI with source and relative timestamps
-- **Stock watchlist** with customizable symbols via modal browser
-- **Weather widget** (collapsible) with temperature, conditions, and alerts
-- **Offline capable** - shows cached data when network unavailable
-- **Graceful degradation** - each panel handles errors independently
+- **Stock watchlist** with configurable default symbols and a modal
+  browser for adding/removing tickers; company names resolved via
+  the Tiingo meta API
+- **Weather widget** (collapsible) with temperature, conditions, and
+  NWS critical weather alerts for US locations
+- **Offline capable** shows cached data when network unavailable
+- **Graceful degradation** each panel handles errors independently
 
 ## Installation
 
@@ -29,7 +35,7 @@ A terminal-based daily news aggregator that displays news headlines alongside we
 ### Build from Source
 
 ```bash
-git clone https://github.com/yourusername/the-daily-update.git
+git clone https://github.com/athola/the-daily-update.git
 cd the-daily-update
 cargo build --release
 ```
@@ -65,6 +71,7 @@ Preferences are stored in `~/.config/daily-update/config.toml`:
 ```toml
 [general]
 default_location = "New York, NY"
+default_watchlist = ["SPY", "QQQ", "DIA"]
 vim_mode = false
 
 [ui]
@@ -89,13 +96,19 @@ daily-update
 
 ## Keybindings
 
+### Date Navigation
+
+| Key | Action |
+|-----|--------|
+| `Left/Right` | Navigate dates (past 7 days) |
+| `d` | Jump to today |
+
 ### Navigation
 
 | Key | Action |
 |-----|--------|
 | `Up/Down` | Navigate within panel |
 | `Tab` | Switch to next panel |
-| `Shift+Tab` | Switch to previous panel |
 
 ### Actions
 
@@ -140,17 +153,27 @@ the-daily-update/
 │   ├── api/            # API clients (news, weather, stocks)
 │   ├── config/         # Configuration and setup wizard
 │   └── fetch/          # Background data fetcher
-└── docs/plans/         # Design documents
+└── docs/adr/           # Architecture Decision Records
 ```
 
-The project uses a Cargo workspace for modular compilation. Each crate compiles independently, reducing rebuild times during development.
+Each crate compiles independently, reducing rebuild times during
+development.
+
+### Architecture Decision Records
+
+Design rationale is documented in `docs/adr/`:
+
+| ADR | Decision |
+|-----|----------|
+| [001](docs/adr/001-workspace-crate-decomposition.md) | Workspace crate decomposition |
+| [002](docs/adr/002-sync-sqlite-with-arc-mutex.md) | Synchronous SQLite with `Arc<Mutex>` |
+| [003](docs/adr/003-background-fetching-mpsc.md) | Background fetching via mpsc channels |
+| [004](docs/adr/004-dual-error-strategy.md) | Dual error strategy (thiserror + anyhow) |
+| [005](docs/adr/005-api-provider-traits.md) | API provider traits for dependency inversion |
+| [006](docs/adr/006-concurrent-api-fetching.md) | Concurrent API fetching with `tokio::join!` |
+| [007](docs/adr/007-cache-staleness-strategy.md) | Cache staleness strategy and data pruning |
 
 ## Development
-
-### Prerequisites
-
-- Rust 1.70+
-- (Optional) [pre-commit](https://pre-commit.com/) for automated checks
 
 ### Makefile Targets
 
@@ -158,13 +181,16 @@ Run `make help` to see all available targets:
 
 ```bash
 make fmt          # Format code
+make fmt-check    # Check formatting without changes (CI)
 make lint         # Run clippy with strict warnings
 make test         # Run all tests (unit and integration)
 make test-unit    # Run unit tests only
 make build        # Build in debug mode
 make release      # Build in release mode
+make install      # Build release and install via cargo
 make run          # Run the application
-make precommit    # Run lint and test (CI validation)
+make ci           # Full CI pipeline (fmt-check, lint, test, build)
+make precommit    # Run lint and test (pre-commit validation)
 ```
 
 ### Running Tests
