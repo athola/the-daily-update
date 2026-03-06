@@ -51,10 +51,7 @@ pub fn format_relative_time(dt: DateTime<Utc>) -> String {
 
 /// Prune old data from database (keep last 7 days)
 pub fn prune_old_data(db: &Database) -> Result<()> {
-    // Note: This would need additional methods on Database
-    // For now, we'll just clear news older than 7 days via direct SQL
-    // This is a placeholder for future implementation
-    let _ = db;
+    db.prune_news_older_than_days(7)?;
     Ok(())
 }
 

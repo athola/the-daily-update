@@ -3,7 +3,9 @@
 # Rust TUI application for news, weather, and stock aggregation
 # Uses Cargo workspace for modular compilation
 
-.PHONY: help lint test test-unit test-integration build clean check fmt all run info
+.PHONY: help lint test test-unit test-integration test-verbose test-crate \
+        build release clean check fmt fmt-check run info all precommit ci \
+        validate-makefile install
 
 # Default target
 .DEFAULT_GOAL := help
@@ -26,11 +28,14 @@ help: ## Display this help message
 fmt: ## Format code using rustfmt (all workspace members)
 	cargo fmt --all
 
+fmt-check: ## Check formatting without applying changes (for CI)
+	cargo fmt --all -- --check
+
 check: ## Run cargo check for fast compilation validation
 	cargo check --workspace
 
 lint: ## Run clippy for linting with all warnings as errors
-	cargo clippy --workspace --all-targets --all-features -- -D warnings
+	cargo clippy --workspace --all-targets -- -D warnings
 
 run: ## Run the application
 	cargo run --package daily-update
@@ -43,12 +48,15 @@ test-unit: ## Run unit tests only (all workspace members)
 	cargo test --workspace --lib
 
 test-integration: ## Run integration tests only
-	cargo test --package daily-update --test '*'
+	cargo test --workspace --test '*'
 
 test-verbose: ## Run all tests with verbose output
 	cargo test --workspace -- --nocapture
 
 test-crate: ## Run tests for a specific crate (usage: make test-crate CRATE=data)
+ifndef CRATE
+	$(error CRATE is required. Usage: make test-crate CRATE=<crate-name>)
+endif
 	cargo test --package $(CRATE)
 
 ##@ Build
@@ -58,6 +66,9 @@ build: ## Build the project in debug mode
 
 release: ## Build the project in release mode
 	cargo build --workspace --release
+
+install: release ## Install the release binary via cargo
+	cargo install --path crates/daily-update
 
 clean: ## Clean build artifacts
 	cargo clean
@@ -84,10 +95,17 @@ info: ## Show feature keybindings for demos
 
 ##@ Quality Assurance
 
-all: fmt lint test build ## Run full quality pipeline (format, lint, test, build)
+all: ## Run full quality pipeline (format, lint, test, build)
+	$(MAKE) fmt
+	$(MAKE) lint
+	$(MAKE) test
+	$(MAKE) build
+
+ci: fmt-check lint test build ## Full CI pipeline (non-mutating format check)
+	@echo "$(GREEN)CI checks passed!$(RESET)"
 
 precommit: lint test ## Run pre-commit checks (lint and test)
 	@echo "$(GREEN)Pre-commit checks passed!$(RESET)"
 
 validate-makefile: ## Validate Makefile syntax
-	@make -n help > /dev/null 2>&1 && echo "$(GREEN)Makefile syntax is valid$(RESET)" || (echo "$(YELLOW)Makefile syntax error$(RESET)" && exit 1)
+	@$(MAKE) -n help > /dev/null 2>&1 && echo "$(GREEN)Makefile syntax is valid$(RESET)" || (echo "$(YELLOW)Makefile syntax error$(RESET)" && exit 1)

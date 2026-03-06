@@ -27,7 +27,7 @@ pub enum WeatherApiError {
 pub struct WeatherApiResponse {
     pub main: WeatherMain,
     pub weather: Vec<WeatherCondition>,
-    pub wind: WeatherWind,
+    pub wind: Option<WeatherWind>,
     pub name: String,
 }
 
@@ -143,16 +143,13 @@ const OWM_GEO_BASE: &str = "https://api.openweathermap.org/geo/1.0";
 
 impl WeatherClient {
     /// Create a new OpenWeatherMap client with the provided API key
-    pub fn new(api_key: ApiKey) -> Self {
-        Self {
+    pub fn new(api_key: ApiKey) -> Result<Self, reqwest::Error> {
+        Ok(Self {
             api_key,
-            client: Client::new(),
-        }
-    }
-
-    /// Create a WeatherClient from a raw string (for backwards compatibility)
-    pub fn from_string(api_key: String) -> Self {
-        Self::new(ApiKey::from_trusted(api_key))
+            client: Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()?,
+        })
     }
 
     /// Geocode a location string to lat/lon using OpenWeatherMap geocoding API
@@ -184,10 +181,7 @@ impl WeatherClient {
 
     /// Fetch weather alerts from NWS API using lat/lon coordinates
     async fn fetch_nws_alerts(&self, lat: f64, lon: f64) -> Option<(String, String, String)> {
-        let url = format!(
-            "{}/alerts/active?point={:.4},{:.4}",
-            NWS_API_BASE, lat, lon
-        );
+        let url = format!("{}/alerts/active?point={:.4},{:.4}", NWS_API_BASE, lat, lon);
 
         let response = self
             .client
@@ -212,11 +206,7 @@ impl WeatherClient {
                 .clone()
                 .or_else(|| f.properties.headline.clone())
                 .unwrap_or_else(|| "Weather Alert".to_string());
-            let description = f
-                .properties
-                .description
-                .clone()
-                .unwrap_or_default();
+            let description = f.properties.description.clone().unwrap_or_default();
             let severity = f
                 .properties
                 .severity
@@ -225,11 +215,22 @@ impl WeatherClient {
             (title, description, severity)
         })
     }
+}
 
+impl std::str::FromStr for WeatherClient {
+    type Err = Box<dyn std::error::Error + Send + Sync>;
+
+    fn from_str(api_key: &str) -> Result<Self, Self::Err> {
+        let key: ApiKey = api_key.parse()?;
+        Ok(Self::new(key)?)
+    }
+}
+
+impl crate::WeatherProvider for WeatherClient {
     /// Fetch current weather data for a location
     ///
     /// Fetches weather from OpenWeatherMap and alerts from NWS (for US locations).
-    pub async fn fetch_weather(&self, location: &str) -> Result<WeatherData, WeatherApiError> {
+    async fn fetch_weather(&self, location: &str) -> Result<WeatherData, WeatherApiError> {
         let url = format!("{}/weather", WEATHER_API_BASE_URL);
 
         // Normalize location to handle US state abbreviations
@@ -252,7 +253,7 @@ impl WeatherClient {
             let error_text = response
                 .text()
                 .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
+                .unwrap_or_else(|e| format!("<body unreadable: {}>", e));
             return Err(WeatherApiError::ApiError(format!(
                 "HTTP {}: {}",
                 status, error_text
@@ -264,14 +265,10 @@ impl WeatherClient {
         // Try to fetch alerts from NWS using geocoding
         let (alert_title, alert_description, alert_severity) =
             match self.geocode(&normalized_location).await {
-                Ok(Some((lat, lon))) => {
-                    match self.fetch_nws_alerts(lat, lon).await {
-                        Some((title, desc, severity)) => {
-                            (Some(title), Some(desc), Some(severity))
-                        }
-                        None => (None, None, None),
-                    }
-                }
+                Ok(Some((lat, lon))) => match self.fetch_nws_alerts(lat, lon).await {
+                    Some((title, desc, severity)) => (Some(title), Some(desc), Some(severity)),
+                    None => (None, None, None),
+                },
                 _ => (None, None, None),
             };
 
@@ -282,7 +279,7 @@ impl WeatherClient {
             temperature: Some(api_response.main.temp),
             condition: api_response.weather.first().map(|w| w.main.clone()),
             humidity: Some(api_response.main.humidity),
-            wind_speed: Some(api_response.wind.speed),
+            wind_speed: api_response.wind.map(|w| w.speed),
             alert_title,
             alert_description,
             alert_severity,
@@ -399,12 +396,18 @@ mod tests {
     #[test]
     fn given_multi_comma_location_when_normalized_then_handles_correctly() {
         // DC after "D.C.," should be recognized as state abbreviation
-        assert_eq!(normalize_location("Washington, D.C., DC"), "Washington, D.C.,US");
+        assert_eq!(
+            normalize_location("Washington, D.C., DC"),
+            "Washington, D.C.,US"
+        );
     }
 
     #[test]
     fn given_multi_part_international_when_normalized_then_returns_unchanged() {
-        assert_eq!(normalize_location("City, Province, Canada"), "City, Province, Canada");
+        assert_eq!(
+            normalize_location("City, Province, Canada"),
+            "City, Province, Canada"
+        );
     }
 
     #[test]
@@ -479,14 +482,14 @@ mod tests {
 
     #[test]
     fn test_weather_client_creation() {
-        let client = WeatherClient::from_string("test_api_key".to_string());
+        let client: WeatherClient = "test_api_key".parse().unwrap();
         assert_eq!(client.api_key.as_str(), "test_api_key");
     }
 
     #[test]
     fn test_weather_client_with_api_key() {
         let api_key = ApiKey::from_trusted("my-weather-key".to_string());
-        let client = WeatherClient::new(api_key);
+        let client = WeatherClient::new(api_key).unwrap();
         assert_eq!(client.api_key.as_str(), "my-weather-key");
     }
 
@@ -513,8 +516,29 @@ mod tests {
         assert_eq!(response.main.temp, 72.5);
         assert_eq!(response.main.humidity, 65);
         assert_eq!(response.weather[0].main, "Clear");
-        assert_eq!(response.wind.speed, 10.5);
+        assert_eq!(response.wind.unwrap().speed, 10.5);
         assert_eq!(response.name, "New York");
+    }
+
+    #[test]
+    fn test_weather_api_response_without_wind() {
+        let json = r#"{
+            "main": {
+                "temp": 72.5,
+                "humidity": 65
+            },
+            "weather": [
+                {
+                    "main": "Clear",
+                    "description": "clear sky"
+                }
+            ],
+            "name": "New York"
+        }"#;
+
+        let response: WeatherApiResponse =
+            serde_json::from_str(json).expect("Should deserialize without wind");
+        assert!(response.wind.is_none());
     }
 
     // ============================================================

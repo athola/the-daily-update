@@ -139,11 +139,16 @@ impl Config {
         Ok(())
     }
 
-    /// Check if all required API keys are present
+    /// Check if all required API keys are present and non-empty
     pub fn has_api_keys(&self) -> bool {
-        self.apis.news_api_key.is_some()
-            && self.apis.weather_api_key.is_some()
-            && self.apis.tiingo_api_key.is_some()
+        let non_empty = |opt: &Option<String>| {
+            opt.as_deref()
+                .map(|s| !s.trim().is_empty())
+                .unwrap_or(false)
+        };
+        non_empty(&self.apis.news_api_key)
+            && non_empty(&self.apis.weather_api_key)
+            && non_empty(&self.apis.tiingo_api_key)
     }
 
     /// Get list of missing API keys
@@ -198,10 +203,7 @@ mod tests {
     fn given_default_config_then_has_default_watchlist() {
         let config = Config::default();
 
-        assert_eq!(
-            config.general.default_watchlist,
-            vec!["SPY", "QQQ", "DIA"]
-        );
+        assert_eq!(config.general.default_watchlist, vec!["SPY", "QQQ", "DIA"]);
     }
 
     #[test]
@@ -268,14 +270,16 @@ mod tests {
     }
 
     #[test]
-    fn given_empty_string_api_keys_when_has_api_keys_then_returns_true() {
-        // Note: Empty strings are still considered "present" - may want to change this behavior
+    fn given_empty_string_api_keys_when_has_api_keys_then_returns_false() {
         let mut config = Config::default();
         config.apis.news_api_key = Some(String::new());
         config.apis.weather_api_key = Some(String::new());
         config.apis.tiingo_api_key = Some(String::new());
 
-        assert!(config.has_api_keys(), "Empty strings count as present");
+        assert!(
+            !config.has_api_keys(),
+            "Empty strings should not count as present"
+        );
     }
 
     // ============================================================
@@ -408,10 +412,7 @@ mod tests {
         assert!(!config.general.vim_mode);
         assert_eq!(config.ui.theme, "dark");
         assert!(config.apis.news_api_key.is_none());
-        assert_eq!(
-            config.general.default_watchlist,
-            vec!["SPY", "QQQ", "DIA"]
-        );
+        assert_eq!(config.general.default_watchlist, vec!["SPY", "QQQ", "DIA"]);
     }
 
     #[test]

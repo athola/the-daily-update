@@ -10,5 +10,8 @@ app = { workspace = true }
 data = { workspace = true }
 config = { workspace = true }
 ratatui = { workspace = true }
-crossterm = { workspace = true }
 chrono = { workspace = true }
+
+[dev-dependencies]
+data = { path = "../data", features = ["test-helpers"] }
+config = { workspace = true }

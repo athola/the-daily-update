@@ -12,6 +12,8 @@ use app::{App, Panel};
 use data::cache::format_relative_time;
 use data::models::StockData;
 
+const MAX_STOCK_CARDS: usize = 6;
+
 /// Render the stocks panel
 pub fn render_stocks_panel(frame: &mut Frame, app: &App, area: Rect) {
     let is_active = app.active_panel == Panel::Stocks;
@@ -58,9 +60,18 @@ pub fn render_stocks_panel(frame: &mut Frame, app: &App, area: Rect) {
     }
 
     // Calculate card layout - horizontal row of cards
-    let card_count = app.stocks.len().min(6); // Max 6 cards
+    let card_count = app.stocks.len().min(MAX_STOCK_CARDS);
+    let base = 100u16 / card_count as u16;
+    let remainder = 100u16 % card_count as u16;
     let constraints: Vec<Constraint> = (0..card_count)
-        .map(|_| Constraint::Percentage((100 / card_count) as u16))
+        .map(|i| {
+            let pct = if i == card_count - 1 {
+                base + remainder
+            } else {
+                base
+            };
+            Constraint::Percentage(pct)
+        })
         .collect();
 
     let card_areas = Layout::default()
@@ -70,7 +81,7 @@ pub fn render_stocks_panel(frame: &mut Frame, app: &App, area: Rect) {
         .split(inner);
 
     // Render each stock card
-    for (i, stock) in app.stocks.iter().take(6).enumerate() {
+    for (i, stock) in app.stocks.iter().take(MAX_STOCK_CARDS).enumerate() {
         render_stock_card(frame, stock, card_areas[i]);
     }
 }

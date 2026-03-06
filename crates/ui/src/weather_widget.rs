@@ -181,7 +181,7 @@ fn render_expanded_weather(frame: &mut Frame, app: &App, parent_area: Rect) {
             frame.render_widget(content, inner);
         }
         None => {
-            let msg = Paragraph::new("Weather data unavailable. Press 'r' to refresh.")
+            let msg = Paragraph::new("Weather unavailable. Press 'r' to refresh.")
                 .style(Style::default().fg(Color::DarkGray));
             frame.render_widget(msg, inner);
         }
