@@ -1,14 +1,23 @@
 //! Tiingo API client for stock data
 
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
 use chrono::Utc;
 use data::models::StockData;
+use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde::Deserialize;
 use thiserror::Error;
 
 use crate::ApiKey;
 
-const TIINGO_API_BASE: &str = "https://api.tiingo.com/iex";
+const TIINGO_IEX_BASE: &str = "https://api.tiingo.com/iex";
+const TIINGO_META_BASE: &str = "https://api.tiingo.com/tiingo/daily";
+
+/// In-memory cache for company names (ticker -> name)
+static NAME_CACHE: Lazy<Arc<Mutex<HashMap<String, String>>>> =
+    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 #[derive(Debug, Error)]
 pub enum StocksApiError {
@@ -32,21 +41,12 @@ struct TiingoResponse {
     prev_close: Option<f64>,
 }
 
-/// Stock name mappings for common symbols
-fn get_stock_name(symbol: &str) -> String {
-    match symbol.to_uppercase().as_str() {
-        "SPY" => "S&P 500 ETF".to_string(),
-        "QQQ" => "NASDAQ ETF".to_string(),
-        "DIA" => "Dow Jones ETF".to_string(),
-        "AAPL" => "Apple Inc.".to_string(),
-        "GOOGL" | "GOOG" => "Alphabet Inc.".to_string(),
-        "MSFT" => "Microsoft Corp.".to_string(),
-        "AMZN" => "Amazon.com".to_string(),
-        "TSLA" => "Tesla Inc.".to_string(),
-        "META" => "Meta Platforms".to_string(),
-        "NVDA" => "NVIDIA Corp.".to_string(),
-        _ => symbol.to_uppercase(),
-    }
+/// Tiingo daily meta response (for company name)
+#[derive(Debug, Deserialize)]
+struct TiingoMetaResponse {
+    #[allow(dead_code)]
+    ticker: String,
+    name: Option<String>,
 }
 
 /// Tiingo API client
@@ -69,6 +69,63 @@ impl StocksClient {
         Self::new(ApiKey::from_trusted(api_key))
     }
 
+    /// Look up the company name for a ticker, checking cache first
+    fn get_cached_name(symbol: &str) -> Option<String> {
+        NAME_CACHE
+            .lock()
+            .ok()
+            .and_then(|cache| cache.get(symbol).cloned())
+    }
+
+    /// Store a company name in the cache
+    fn cache_name(symbol: &str, name: &str) {
+        if let Ok(mut cache) = NAME_CACHE.lock() {
+            cache.insert(symbol.to_string(), name.to_string());
+        }
+    }
+
+    /// Fetch company name from Tiingo meta endpoint for a single ticker
+    async fn fetch_company_name(&self, symbol: &str) -> Result<Option<String>, StocksApiError> {
+        let url = format!(
+            "{}/{}?token={}",
+            TIINGO_META_BASE,
+            symbol.to_lowercase(),
+            self.api_key.as_str()
+        );
+
+        let response = self.client.get(&url).send().await?;
+
+        if !response.status().is_success() {
+            return Ok(None);
+        }
+
+        let meta: TiingoMetaResponse = response
+            .json()
+            .await
+            .map_err(|e| StocksApiError::ParseError(e.to_string()))?;
+
+        Ok(meta.name)
+    }
+
+    /// Resolve the company name for a symbol: cache -> API -> fallback to symbol
+    async fn resolve_name(&self, symbol: &str) -> String {
+        // Check cache first
+        if let Some(name) = Self::get_cached_name(symbol) {
+            return name;
+        }
+
+        // Try fetching from API
+        if let Ok(Some(name)) = self.fetch_company_name(symbol).await {
+            if !name.is_empty() {
+                Self::cache_name(symbol, &name);
+                return name;
+            }
+        }
+
+        // Fall back to symbol itself
+        symbol.to_uppercase()
+    }
+
     /// Fetch stock data for multiple symbols
     pub async fn fetch_stocks(&self, symbols: &[String]) -> Result<Vec<StockData>, StocksApiError> {
         if symbols.is_empty() {
@@ -78,7 +135,7 @@ impl StocksClient {
         let tickers = symbols.join(",");
         let url = format!(
             "{}?tickers={}&token={}",
-            TIINGO_API_BASE,
+            TIINGO_IEX_BASE,
             tickers,
             self.api_key.as_str()
         );
@@ -100,24 +157,25 @@ impl StocksClient {
             .map_err(|e| StocksApiError::ParseError(e.to_string()))?;
 
         let now = Utc::now();
-        let stocks: Vec<StockData> = body
-            .into_iter()
-            .map(|item| {
-                let change_percent = match (item.last_price, item.prev_close) {
-                    (Some(last), Some(prev)) if prev > 0.0 => Some(((last - prev) / prev) * 100.0),
-                    _ => None,
-                };
+        let mut stocks = Vec::new();
 
-                StockData {
-                    id: None,
-                    symbol: item.ticker.to_uppercase(),
-                    name: Some(get_stock_name(&item.ticker)),
-                    price: item.last_price,
-                    change_percent,
-                    fetched_at: now,
-                }
-            })
-            .collect();
+        for item in body {
+            let symbol = item.ticker.to_uppercase();
+            let name = self.resolve_name(&symbol).await;
+            let change_percent = match (item.last_price, item.prev_close) {
+                (Some(last), Some(prev)) if prev > 0.0 => Some(((last - prev) / prev) * 100.0),
+                _ => None,
+            };
+
+            stocks.push(StockData {
+                id: None,
+                symbol,
+                name: Some(name),
+                price: item.last_price,
+                change_percent,
+                fetched_at: now,
+            });
+        }
 
         Ok(stocks)
     }
@@ -155,10 +213,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_stock_name_mapping() {
-        assert_eq!(get_stock_name("SPY"), "S&P 500 ETF");
-        assert_eq!(get_stock_name("aapl"), "Apple Inc.");
-        assert_eq!(get_stock_name("UNKNOWN"), "UNKNOWN");
+    fn test_name_cache_stores_and_retrieves() {
+        StocksClient::cache_name("TEST_SYM", "Test Company");
+        assert_eq!(
+            StocksClient::get_cached_name("TEST_SYM"),
+            Some("Test Company".to_string())
+        );
+    }
+
+    #[test]
+    fn test_name_cache_returns_none_for_unknown() {
+        assert!(StocksClient::get_cached_name("NONEXISTENT_XYZ_999").is_none());
+    }
+
+    #[test]
+    fn test_name_cache_overwrites_existing() {
+        StocksClient::cache_name("OVERWRITE_SYM", "Old Name");
+        StocksClient::cache_name("OVERWRITE_SYM", "New Name");
+        assert_eq!(
+            StocksClient::get_cached_name("OVERWRITE_SYM"),
+            Some("New Name".to_string())
+        );
     }
 
     #[test]
@@ -166,5 +241,14 @@ mod tests {
         let watchlist = StocksClient::default_watchlist();
         assert!(watchlist.contains(&"SPY".to_string()));
         assert_eq!(watchlist.len(), 3);
+    }
+
+    #[test]
+    fn test_available_stocks_contains_major_etfs() {
+        let stocks = StocksClient::available_stocks();
+        let symbols: Vec<&str> = stocks.iter().map(|(s, _)| s.as_str()).collect();
+        assert!(symbols.contains(&"SPY"));
+        assert!(symbols.contains(&"QQQ"));
+        assert!(symbols.contains(&"DIA"));
     }
 }
