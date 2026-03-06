@@ -1,5 +1,6 @@
 //! Application state and main event loop
 
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
@@ -233,6 +234,18 @@ impl App {
                         self.stocks = stocks;
                         self.errors.stocks = None;
                     }
+                    FetchUpdate::StocksAdded(new_stocks) => {
+                        for stock in new_stocks {
+                            if let Some(existing) =
+                                self.stocks.iter_mut().find(|s| s.symbol == stock.symbol)
+                            {
+                                *existing = stock;
+                            } else {
+                                self.stocks.push(stock);
+                            }
+                        }
+                        self.errors.stocks = None;
+                    }
                     FetchUpdate::Error(err) => match err.source {
                         FetchSource::News => self.errors.news = Some(err.message),
                         FetchSource::Weather => self.errors.weather = Some(err.message),
@@ -250,6 +263,7 @@ impl App {
         if should_complete {
             self.fetching = false;
             self.fetch_rx = None;
+            self.fetch_handle = None;
         }
 
         if news_updated {
@@ -474,7 +488,7 @@ impl App {
     /// Adds any stock mentioned in headlines that isn't already in watchlist
     pub fn auto_populate_watchlist(&mut self) -> Vec<String> {
         // Collect unique symbols mentioned in news (excluding default SPY)
-        let mut mentioned: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut mentioned = HashSet::new();
 
         for news in &self.news {
             let symbols = extract_symbols(&news.headline);
@@ -835,10 +849,6 @@ mod tests {
             "Watchlist should have grown"
         );
     }
-
-    // ============================================================
-    // Save Stock Browser Tests
-    // ============================================================
 
     // ============================================================
     // App Lifecycle Tests

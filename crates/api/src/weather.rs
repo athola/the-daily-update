@@ -138,7 +138,7 @@ struct GeocodingResponse {
 }
 
 const NWS_API_BASE: &str = "https://api.weather.gov";
-const NWS_USER_AGENT: &str = "TheDailyUpdate/0.1.0 (https://github.com/athola/the-daily-update)";
+const NWS_USER_AGENT: &str = concat!("TheDailyUpdate/", env!("CARGO_PKG_VERSION"), " (https://github.com/athola/the-daily-update)");
 const OWM_GEO_BASE: &str = "https://api.openweathermap.org/geo/1.0";
 
 impl WeatherClient {
@@ -199,19 +199,14 @@ impl WeatherClient {
         let alerts: NwsAlertsResponse = response.json().await.ok()?;
 
         // Return the most severe/recent alert
-        alerts.features.first().map(|f| {
-            let title = f
-                .properties
+        alerts.features.into_iter().next().map(|f| {
+            let props = f.properties;
+            let title = props
                 .event
-                .clone()
-                .or_else(|| f.properties.headline.clone())
+                .or(props.headline)
                 .unwrap_or_else(|| "Weather Alert".to_string());
-            let description = f.properties.description.clone().unwrap_or_default();
-            let severity = f
-                .properties
-                .severity
-                .clone()
-                .unwrap_or_else(|| "Unknown".to_string());
+            let description = props.description.unwrap_or_default();
+            let severity = props.severity.unwrap_or_else(|| "Unknown".to_string());
             (title, description, severity)
         })
     }
@@ -263,14 +258,14 @@ impl crate::WeatherProvider for WeatherClient {
         let api_response: WeatherApiResponse = response.json().await?;
 
         // Try to fetch alerts from NWS using geocoding
-        let (alert_title, alert_description, alert_severity) =
-            match self.geocode(&normalized_location).await {
-                Ok(Some((lat, lon))) => match self.fetch_nws_alerts(lat, lon).await {
-                    Some((title, desc, severity)) => (Some(title), Some(desc), Some(severity)),
-                    None => (None, None, None),
-                },
-                _ => (None, None, None),
-            };
+        let alert = match self.geocode(&normalized_location).await {
+            Ok(Some((lat, lon))) => self.fetch_nws_alerts(lat, lon).await,
+            _ => None,
+        };
+        let (alert_title, alert_description, alert_severity) = match alert {
+            Some((title, desc, severity)) => (Some(title), Some(desc), Some(severity)),
+            None => (None, None, None),
+        };
 
         // Convert API response to WeatherData
         let weather_data = WeatherData {

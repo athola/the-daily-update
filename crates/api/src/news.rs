@@ -10,7 +10,7 @@ use crate::location::extract_location_from_news;
 use crate::ApiKey;
 
 const NEWS_API_BASE_URL: &str = "https://newsapi.org/v2";
-const USER_AGENT: &str = "TheDailyUpdate/0.1.0 (https://github.com/athola/the-daily-update)";
+const USER_AGENT: &str = concat!("TheDailyUpdate/", env!("CARGO_PKG_VERSION"), " (https://github.com/athola/the-daily-update)");
 
 #[derive(Debug, Error)]
 pub enum NewsApiError {

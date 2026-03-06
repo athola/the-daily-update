@@ -39,8 +39,6 @@ struct TiingoResponse {
 /// Tiingo daily meta response (for company name)
 #[derive(Debug, Deserialize)]
 struct TiingoMetaResponse {
-    #[allow(dead_code)]
-    ticker: String,
     name: Option<String>,
 }
 
@@ -103,12 +101,10 @@ impl StocksClient {
 
     /// Resolve the company name for a symbol: cache -> API -> fallback to symbol
     async fn resolve_name(&self, symbol: &str) -> String {
-        // Check cache first
         if let Some(name) = self.get_cached_name(symbol) {
             return name;
         }
 
-        // Try fetching from API
         if let Ok(Some(name)) = self.fetch_company_name(symbol).await {
             if !name.is_empty() {
                 self.cache_name(symbol, &name);
@@ -116,7 +112,6 @@ impl StocksClient {
             }
         }
 
-        // Fall back to symbol itself
         symbol.to_uppercase()
     }
 
@@ -186,25 +181,33 @@ impl crate::StocksProvider for StocksClient {
             .map_err(|e| StocksApiError::ParseError(e.to_string()))?;
 
         let now = Utc::now();
-        let mut stocks = Vec::new();
 
-        for item in body {
-            let symbol = item.ticker.to_uppercase();
-            let name = self.resolve_name(&symbol).await;
-            let change_percent = match (item.last_price, item.prev_close) {
-                (Some(last), Some(prev)) if prev > 0.0 => Some(((last - prev) / prev) * 100.0),
-                _ => None,
-            };
+        // Resolve all company names concurrently to avoid sequential N+1 API calls
+        let symbols: Vec<String> = body.iter().map(|item| item.ticker.to_uppercase()).collect();
+        let name_futures: Vec<_> = symbols.iter().map(|s| self.resolve_name(s)).collect();
+        let names = futures::future::join_all(name_futures).await;
 
-            stocks.push(StockData {
-                id: None,
-                symbol,
-                name: Some(name),
-                price: item.last_price,
-                change_percent,
-                fetched_at: now,
-            });
-        }
+        let stocks = body
+            .into_iter()
+            .zip(names)
+            .map(|(item, name)| {
+                let symbol = item.ticker.to_uppercase();
+                let change_percent = match (item.last_price, item.prev_close) {
+                    (Some(last), Some(prev)) if prev > 0.0 => {
+                        Some(((last - prev) / prev) * 100.0)
+                    }
+                    _ => None,
+                };
+                StockData {
+                    id: None,
+                    symbol,
+                    name: Some(name),
+                    price: item.last_price,
+                    change_percent,
+                    fetched_at: now,
+                }
+            })
+            .collect();
 
         Ok(stocks)
     }

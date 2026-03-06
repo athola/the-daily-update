@@ -172,7 +172,7 @@ impl Database {
     /// Delete news older than the specified number of days
     pub fn prune_news_older_than_days(&self, days: u32) -> Result<()> {
         self.conn.execute(
-            "DELETE FROM news WHERE published_at < datetime('now', ?1)",
+            "DELETE FROM news WHERE published_at < strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now', ?1)",
             [format!("-{} days", days)],
         )?;
         Ok(())

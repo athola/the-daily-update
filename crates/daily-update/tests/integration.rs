@@ -28,7 +28,7 @@ fn test_config() -> Config {
 fn integration_smoke_test() {
     // Basic integration test to verify test infrastructure works
     let version = env!("CARGO_PKG_VERSION");
-    assert_eq!(version, "0.1.0");
+    assert_eq!(version, "0.1.1");
 }
 
 #[test]

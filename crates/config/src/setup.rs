@@ -191,6 +191,6 @@ fn clean_location_input(input: &str) -> String {
 pub fn display_banner() {
     println!();
     println!("╔═════════════════════════════════════════╗");
-    println!("║       The Daily Update v0.1.0           ║");
+    println!("║       The Daily Update v{}           ║", env!("CARGO_PKG_VERSION"));
     println!("╚═════════════════════════════════════════╝");
 }

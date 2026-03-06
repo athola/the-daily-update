@@ -22,8 +22,10 @@ pub enum FetchUpdate {
     NewsUpdated(Vec<NewsItem>),
     /// Weather data has been updated with source context
     WeatherUpdated(WeatherData, WeatherSource),
-    /// Stocks data has been updated
+    /// Stocks data has been updated (full refresh: replaces all)
     StocksUpdated(Vec<StockData>),
+    /// Additional stocks fetched (incremental: merges into existing)
+    StocksAdded(Vec<StockData>),
     /// An error occurred during fetch
     Error(FetchError),
     /// All fetches complete
@@ -229,25 +231,23 @@ impl BackgroundFetcher {
         // Phase 2: Fetch weather and stocks concurrently
         // Determine weather location from news context
         let weather_params = self.weather_client.as_ref().map(|client| {
-            let (location, source) = {
-                let news_location = fetched_news
-                    .as_ref()
-                    .and_then(|items| items.first())
-                    .and_then(|item| {
-                        extract_location_from_news(
-                            &item.headline,
-                            item.description.as_deref(),
-                            item.source.as_deref(),
-                        )
-                    });
+            let news_location = fetched_news
+                .as_ref()
+                .and_then(|items| items.first())
+                .and_then(|item| {
+                    extract_location_from_news(
+                        &item.headline,
+                        item.description.as_deref(),
+                        item.source.as_deref(),
+                    )
+                });
 
-                match news_location {
-                    Some(loc) => (loc, WeatherSource::NewsContext),
-                    None => (
-                        self.config.general.default_location.clone(),
-                        WeatherSource::Default,
-                    ),
-                }
+            let (location, source) = match news_location {
+                Some(loc) => (loc, WeatherSource::NewsContext),
+                None => (
+                    self.config.general.default_location.clone(),
+                    WeatherSource::Default,
+                ),
             };
             (client, location, source)
         });
@@ -282,6 +282,7 @@ impl BackgroundFetcher {
     }
 
     /// Fetch stocks only for specific symbols (used after auto-populate adds new stocks)
+    /// Sends `StocksAdded` instead of `StocksUpdated` so the UI merges rather than replaces.
     pub async fn fetch_stocks_only(
         &self,
         symbols: Vec<String>,
@@ -294,7 +295,20 @@ impl BackgroundFetcher {
         }
 
         if let Some(client) = &self.stocks_client {
-            Self::fetch_stocks_task(client, symbols, &db, &tx).await;
+            match client.fetch_stocks(&symbols).await {
+                Ok(stocks) => {
+                    Self::store_stocks(&db, &stocks).await;
+                    let _ = tx.send(FetchUpdate::StocksAdded(stocks)).await;
+                }
+                Err(e) => {
+                    let _ = tx
+                        .send(FetchUpdate::Error(FetchError {
+                            source: FetchSource::Stocks,
+                            message: e.to_string(),
+                        }))
+                        .await;
+                }
+            }
         }
 
         let _ = tx.send(FetchUpdate::Complete).await;

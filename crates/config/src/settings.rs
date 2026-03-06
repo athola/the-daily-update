@@ -151,16 +151,21 @@ impl Config {
             && non_empty(&self.apis.tiingo_api_key)
     }
 
-    /// Get list of missing API keys
+    /// Get list of missing API keys (consistent with `has_api_keys`)
     pub fn missing_api_keys(&self) -> Vec<&'static str> {
+        let non_empty = |opt: &Option<String>| {
+            opt.as_deref()
+                .map(|s| !s.trim().is_empty())
+                .unwrap_or(false)
+        };
         let mut missing = Vec::new();
-        if self.apis.news_api_key.is_none() {
+        if !non_empty(&self.apis.news_api_key) {
             missing.push("NEWS_API_KEY");
         }
-        if self.apis.weather_api_key.is_none() {
+        if !non_empty(&self.apis.weather_api_key) {
             missing.push("WEATHER_API_KEY");
         }
-        if self.apis.tiingo_api_key.is_none() {
+        if !non_empty(&self.apis.tiingo_api_key) {
             missing.push("TIINGO_API_KEY");
         }
         missing
