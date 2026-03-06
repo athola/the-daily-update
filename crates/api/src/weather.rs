@@ -109,6 +109,38 @@ pub fn normalize_location(location: &str) -> String {
     location.to_string()
 }
 
+/// NWS alerts API response
+#[derive(Debug, Deserialize)]
+struct NwsAlertsResponse {
+    features: Vec<NwsAlertFeature>,
+}
+
+/// NWS alert feature
+#[derive(Debug, Deserialize)]
+struct NwsAlertFeature {
+    properties: NwsAlertProperties,
+}
+
+/// NWS alert properties
+#[derive(Debug, Deserialize)]
+struct NwsAlertProperties {
+    event: Option<String>,
+    headline: Option<String>,
+    description: Option<String>,
+    severity: Option<String>,
+}
+
+/// OpenWeatherMap geocoding response (for lat/lon lookup)
+#[derive(Debug, Deserialize)]
+struct GeocodingResponse {
+    lat: f64,
+    lon: f64,
+}
+
+const NWS_API_BASE: &str = "https://api.weather.gov";
+const NWS_USER_AGENT: &str = "TheDailyUpdate/0.1.0 (https://github.com/athola/the-daily-update)";
+const OWM_GEO_BASE: &str = "https://api.openweathermap.org/geo/1.0";
+
 impl WeatherClient {
     /// Create a new OpenWeatherMap client with the provided API key
     pub fn new(api_key: ApiKey) -> Self {
@@ -123,14 +155,80 @@ impl WeatherClient {
         Self::new(ApiKey::from_trusted(api_key))
     }
 
+    /// Geocode a location string to lat/lon using OpenWeatherMap geocoding API
+    async fn geocode(&self, location: &str) -> Result<Option<(f64, f64)>, WeatherApiError> {
+        let url = format!("{}/direct", OWM_GEO_BASE);
+
+        let response = self
+            .client
+            .get(&url)
+            .query(&[
+                ("q", location),
+                ("limit", "1"),
+                ("appid", self.api_key.as_str()),
+            ])
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Ok(None);
+        }
+
+        let results: Vec<GeocodingResponse> = response
+            .json()
+            .await
+            .map_err(|e| WeatherApiError::ParseError(e.to_string()))?;
+
+        Ok(results.first().map(|r| (r.lat, r.lon)))
+    }
+
+    /// Fetch weather alerts from NWS API using lat/lon coordinates
+    async fn fetch_nws_alerts(&self, lat: f64, lon: f64) -> Option<(String, String, String)> {
+        let url = format!(
+            "{}/alerts/active?point={:.4},{:.4}",
+            NWS_API_BASE, lat, lon
+        );
+
+        let response = self
+            .client
+            .get(&url)
+            .header("User-Agent", NWS_USER_AGENT)
+            .header("Accept", "application/geo+json")
+            .send()
+            .await
+            .ok()?;
+
+        if !response.status().is_success() {
+            return None;
+        }
+
+        let alerts: NwsAlertsResponse = response.json().await.ok()?;
+
+        // Return the most severe/recent alert
+        alerts.features.first().map(|f| {
+            let title = f
+                .properties
+                .event
+                .clone()
+                .or_else(|| f.properties.headline.clone())
+                .unwrap_or_else(|| "Weather Alert".to_string());
+            let description = f
+                .properties
+                .description
+                .clone()
+                .unwrap_or_default();
+            let severity = f
+                .properties
+                .severity
+                .clone()
+                .unwrap_or_else(|| "Unknown".to_string());
+            (title, description, severity)
+        })
+    }
+
     /// Fetch current weather data for a location
     ///
-    /// # Arguments
-    /// * `location` - Location name (e.g., "New York", "London,uk")
-    ///
-    /// # Returns
-    /// * `Ok(WeatherData)` - Weather data for the location
-    /// * `Err(WeatherApiError)` - If the request fails or API returns an error
+    /// Fetches weather from OpenWeatherMap and alerts from NWS (for US locations).
     pub async fn fetch_weather(&self, location: &str) -> Result<WeatherData, WeatherApiError> {
         let url = format!("{}/weather", WEATHER_API_BASE_URL);
 
@@ -163,17 +261,31 @@ impl WeatherClient {
 
         let api_response: WeatherApiResponse = response.json().await?;
 
+        // Try to fetch alerts from NWS using geocoding
+        let (alert_title, alert_description, alert_severity) =
+            match self.geocode(&normalized_location).await {
+                Ok(Some((lat, lon))) => {
+                    match self.fetch_nws_alerts(lat, lon).await {
+                        Some((title, desc, severity)) => {
+                            (Some(title), Some(desc), Some(severity))
+                        }
+                        None => (None, None, None),
+                    }
+                }
+                _ => (None, None, None),
+            };
+
         // Convert API response to WeatherData
         let weather_data = WeatherData {
-            id: None, // Will be set when saved to database
+            id: None,
             location: api_response.name,
             temperature: Some(api_response.main.temp),
             condition: api_response.weather.first().map(|w| w.main.clone()),
             humidity: Some(api_response.main.humidity),
             wind_speed: Some(api_response.wind.speed),
-            alert_title: None, // Alerts are not included in current weather endpoint
-            alert_description: None,
-            alert_severity: None,
+            alert_title,
+            alert_description,
+            alert_severity,
             fetched_at: Utc::now(),
         };
 
@@ -403,5 +515,81 @@ mod tests {
         assert_eq!(response.weather[0].main, "Clear");
         assert_eq!(response.wind.speed, 10.5);
         assert_eq!(response.name, "New York");
+    }
+
+    // ============================================================
+    // NWS Alert Deserialization Tests
+    // ============================================================
+
+    #[test]
+    fn test_nws_alerts_response_deserialization() {
+        let json = r#"{
+            "features": [
+                {
+                    "properties": {
+                        "event": "Winter Storm Warning",
+                        "headline": "Winter Storm Warning issued",
+                        "description": "Heavy snow expected",
+                        "severity": "Severe"
+                    }
+                }
+            ]
+        }"#;
+
+        let response: NwsAlertsResponse =
+            serde_json::from_str(json).expect("Should deserialize NWS alerts");
+        assert_eq!(response.features.len(), 1);
+        assert_eq!(
+            response.features[0].properties.event,
+            Some("Winter Storm Warning".to_string())
+        );
+        assert_eq!(
+            response.features[0].properties.severity,
+            Some("Severe".to_string())
+        );
+    }
+
+    #[test]
+    fn test_nws_alerts_empty_response() {
+        let json = r#"{"features": []}"#;
+
+        let response: NwsAlertsResponse =
+            serde_json::from_str(json).expect("Should deserialize empty NWS alerts");
+        assert!(response.features.is_empty());
+    }
+
+    #[test]
+    fn test_nws_alerts_with_null_fields() {
+        let json = r#"{
+            "features": [
+                {
+                    "properties": {
+                        "event": null,
+                        "headline": "Some headline",
+                        "description": null,
+                        "severity": null
+                    }
+                }
+            ]
+        }"#;
+
+        let response: NwsAlertsResponse =
+            serde_json::from_str(json).expect("Should deserialize NWS alerts with nulls");
+        assert!(response.features[0].properties.event.is_none());
+        assert_eq!(
+            response.features[0].properties.headline,
+            Some("Some headline".to_string())
+        );
+    }
+
+    #[test]
+    fn test_geocoding_response_deserialization() {
+        let json = r#"[{"lat": 40.7128, "lon": -74.0060}]"#;
+
+        let results: Vec<GeocodingResponse> =
+            serde_json::from_str(json).expect("Should deserialize geocoding response");
+        assert_eq!(results.len(), 1);
+        assert!((results[0].lat - 40.7128).abs() < 0.001);
+        assert!((results[0].lon - (-74.0060)).abs() < 0.001);
     }
 }
