@@ -107,9 +107,13 @@ impl App {
             }
         };
 
-        // Initialize watchlist with defaults if empty
+        // Initialize watchlist with configured defaults if empty
         let watchlist = if watchlist.is_empty() {
-            let defaults = StocksClient::default_watchlist();
+            let defaults = if config.general.default_watchlist.is_empty() {
+                StocksClient::default_watchlist()
+            } else {
+                config.general.default_watchlist.clone()
+            };
             if let Ok(db) = db.lock() {
                 for symbol in &defaults {
                     let _ = db.add_to_watchlist(symbol);
@@ -718,6 +722,27 @@ mod tests {
                 symbols
             );
         };
+    }
+
+    #[test]
+    fn given_config_with_custom_watchlist_when_app_created_then_uses_config_watchlist() {
+        let mut config = Config::default();
+        config.general.default_watchlist = vec!["AAPL".to_string(), "MSFT".to_string()];
+        let db = Database::in_memory().unwrap();
+        let app = App::new(config, db);
+
+        assert_eq!(app.watchlist, vec!["AAPL", "MSFT"]);
+    }
+
+    #[test]
+    fn given_config_with_empty_watchlist_when_app_created_then_uses_hardcoded_defaults() {
+        let mut config = Config::default();
+        config.general.default_watchlist = vec![];
+        let db = Database::in_memory().unwrap();
+        let app = App::new(config, db);
+
+        assert!(app.watchlist.contains(&"SPY".to_string()));
+        assert_eq!(app.watchlist.len(), 3);
     }
 
     #[test]

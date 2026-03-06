@@ -81,6 +81,29 @@ pub fn run_setup_wizard(config: &mut Config) -> Result<()> {
         config.general.default_location = cleaned;
     }
 
+    // Watchlist configuration
+    println!();
+    println!("Configure your default stock watchlist.");
+    println!("  Available: SPY, QQQ, DIA, AAPL, GOOGL, MSFT, AMZN, TSLA, META, NVDA");
+    println!("  Enter comma-separated symbols (e.g., SPY,AAPL,MSFT)");
+    print!("  Watchlist [{}]: ", config.general.default_watchlist.join(","));
+    io::stdout().flush()?;
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    let input = input.trim();
+
+    if !input.is_empty() {
+        let symbols: Vec<String> = input
+            .split(',')
+            .map(|s| s.trim().to_uppercase())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if !symbols.is_empty() {
+            config.general.default_watchlist = symbols;
+        }
+    }
+
     // Ask about vim mode
     print!("Enable vim-style keybindings? (y/n) [n]: ");
     io::stdout().flush()?;

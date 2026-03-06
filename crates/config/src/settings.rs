@@ -23,6 +23,8 @@ pub struct GeneralConfig {
     pub default_location: String,
     #[serde(default)]
     pub vim_mode: bool,
+    #[serde(default = "default_watchlist")]
+    pub default_watchlist: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,6 +44,10 @@ fn default_location() -> String {
     "New York,US".to_string()
 }
 
+fn default_watchlist() -> Vec<String> {
+    vec!["SPY".to_string(), "QQQ".to_string(), "DIA".to_string()]
+}
+
 fn default_theme() -> String {
     "dark".to_string()
 }
@@ -51,6 +57,7 @@ impl Default for GeneralConfig {
         Self {
             default_location: default_location(),
             vim_mode: false,
+            default_watchlist: default_watchlist(),
         }
     }
 }
@@ -188,11 +195,22 @@ mod tests {
     }
 
     #[test]
+    fn given_default_config_then_has_default_watchlist() {
+        let config = Config::default();
+
+        assert_eq!(
+            config.general.default_watchlist,
+            vec!["SPY", "QQQ", "DIA"]
+        );
+    }
+
+    #[test]
     fn given_default_general_config_then_has_expected_values() {
         let general = GeneralConfig::default();
 
         assert_eq!(general.default_location, "New York,US");
         assert!(!general.vim_mode);
+        assert_eq!(general.default_watchlist, vec!["SPY", "QQQ", "DIA"]);
     }
 
     #[test]
@@ -390,6 +408,24 @@ mod tests {
         assert!(!config.general.vim_mode);
         assert_eq!(config.ui.theme, "dark");
         assert!(config.apis.news_api_key.is_none());
+        assert_eq!(
+            config.general.default_watchlist,
+            vec!["SPY", "QQQ", "DIA"]
+        );
+    }
+
+    #[test]
+    fn given_toml_with_custom_watchlist_when_deserialized_then_watchlist_correct() {
+        let toml_str = r#"
+            [general]
+            default_watchlist = ["AAPL", "MSFT", "GOOGL"]
+        "#;
+
+        let config: Config = toml::from_str(toml_str).expect("Deserialization should succeed");
+        assert_eq!(
+            config.general.default_watchlist,
+            vec!["AAPL", "MSFT", "GOOGL"]
+        );
     }
 
     #[test]
